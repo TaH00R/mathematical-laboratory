@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strange Attractors</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <a class="back" href="../index.html">← math lab</a>
+
+        <div class="title">
+            <div class="eyebrow">03 / DYNAMICAL SYSTEMS</div>
+            <h1>STRANGE <span>ATTRACTORS</span></h1>
+        </div>
+
+        <div class="formula">dx/dt = σ(y − x)</div>
+    </header>
+
+    <main>
+        <section class="intro">
+            <div>
+                <div class="kicker">DETERMINISTIC CHAOS</div>
+                <h2>simple rules.<br>impossibly complicated motion.</h2>
+                <p class="description">
+                    A strange attractor is what happens when a deterministic system
+                    never settles down, never escapes, and yet never quite repeats.
+                    Change the starting point by almost nothing and the trajectories
+                    eventually tear apart.
+                </p>
+            </div>
+
+            <div class="stats">
+                <div>
+                    <span>SYSTEM</span>
+                    <b id="systemStat">LORENZ</b>
+                </div>
+                <div>
+                    <span>POINTS</span>
+                    <b id="pointsStat">0</b>
+                </div>
+                <div>
+                    <span>STATE</span>
+                    <b id="stateStat">RUNNING</b>
+                </div>
+            </div>
+        </section>
+
+        <section class="lab">
+            <div class="canvas-wrap">
+                <canvas id="canvas"></canvas>
+
+                <div class="canvas-hint">
+                    DRAG TO ROTATE · SCROLL TO ZOOM
+                </div>
+
+                <div class="draw-status">
+                    <span class="dot"></span>
+                    CHAOTIC TRAJECTORY
+                </div>
+            </div>
+
+            <aside class="controls">
+                <div class="control-block">
+                    <div class="section-label">SYSTEM</div>
+
+                    <div class="preset-grid">
+                        <button class="system-btn primary" data-system="lorenz">lorenz</button>
+                        <button class="system-btn" data-system="rossler">rössler</button>
+                    </div>
+                </div>
+
+                <div class="control-block">
+                    <div class="label-row">
+                        <span id="param1Label">σ</span>
+                        <b id="param1Value">10.00</b>
+                    </div>
+                    <input id="param1" type="range" min="0" max="30" step="0.01" value="10">
+
+                    <div class="label-row">
+                        <span id="param2Label">ρ</span>
+                        <b id="param2Value">28.00</b>
+                    </div>
+                    <input id="param2" type="range" min="0" max="60" step="0.01" value="28">
+
+                    <div class="label-row">
+                        <span id="param3Label">β</span>
+                        <b id="param3Value">2.67</b>
+                    </div>
+                    <input id="param3" type="range" min="0" max="10" step="0.01" value="2.6667">
+                </div>
+
+                <div class="control-block">
+                    <div class="section-label">INITIAL CONDITIONS</div>
+
+                    <div class="label-row">
+                        <span>x₀</span>
+                        <b id="xValue">0.10</b>
+                    </div>
+                    <input id="initialX" type="range" min="-20" max="20" step="0.01" value="0.1">
+
+                    <div class="label-row">
+                        <span>y₀</span>
+                        <b id="yValue">0.00</b>
+                    </div>
+                    <input id="initialY" type="range" min="-20" max="20" step="0.01" value="0">
+
+                    <div class="label-row">
+                        <span>z₀</span>
+                        <b id="zValue">0.00</b>
+                    </div>
+                    <input id="initialZ" type="range" min="-20" max="50" step="0.01" value="0">
+                </div>
+
+                <div class="control-block">
+                    <div class="label-row">
+                        <span>TIME STEP</span>
+                        <b id="dtValue">0.005</b>
+                    </div>
+                    <input id="dt" type="range" min="0.001" max="0.02" step="0.001" value="0.005">
+
+                    <div class="label-row">
+                        <span>TRAIL LENGTH</span>
+                        <b id="trailValue">18000</b>
+                    </div>
+                    <input id="trail" type="range" min="1000" max="30000" step="1000" value="18000">
+                </div>
+
+                <div class="buttons">
+                    <button id="pauseBtn">pause</button>
+                    <button id="resetBtn" class="primary">reset simulation</button>
+                    <button id="randomBtn">random starting point</button>
+                </div>
+
+                <div class="explain">
+                    <div class="label">WHAT YOU'RE SEEING</div>
+                    <p>
+                        The trajectory is generated numerically from the selected
+                        differential equations. Nothing is being drawn by hand.
+                    </p>
+
+                    <p>
+                        <code>same rules + same start = same trajectory</code>
+                    </p>
+
+                    <p>
+                        Tiny changes to the initial state eventually create visibly
+                        different paths. That's sensitive dependence on initial conditions.
+                    </p>
+                </div>
+            </aside>
+        </section>
+
+        <section class="bottom">
+            <div>
+                <div class="kicker">THE IDEA</div>
+                <h3>chaos isn't randomness.<br>it's mathematics being difficult.</h3>
+            </div>
+
+            <p>
+                The Lorenz system is a set of three coupled differential equations.
+                The simulation repeatedly takes tiny numerical steps through that
+                three-dimensional state space. The resulting path stays inside a
+                bounded region while continually folding and stretching, producing
+                the characteristic butterfly-shaped attractor.
+                <br><br>
+                Try changing <b>ρ</b>, then reset the system. The parameters control
+                the geometry and stability of the system, while the initial conditions
+                decide where the trajectory begins.
+            </p>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

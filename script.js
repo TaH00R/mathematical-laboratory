@@ -40,13 +40,13 @@ const experiments = [
     },
 
     {
-        number: "05",
-        title: "Lorenz Attractor",
+        number: "03",
+        title: "Strange Attractors",
         category: "fractals",
         categoryName: "Chaos",
         description: "Tiny changes in initial conditions create wildly different trajectories.",
-        path: "05-lorenz-attractor",
-        ready: false
+        path: "03-strange-attractors",
+        ready: true
     },
 
     {
