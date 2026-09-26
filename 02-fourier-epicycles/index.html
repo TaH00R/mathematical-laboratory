@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fourier Epicycles : Math Lab</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <a class="back" href="../">← math lab</a>
+        <div class="title">
+            <span class="eyebrow">02 / ANALYSIS</span>
+            <h1>FOURIER <span>EPICYCLES</span></h1>
+        </div>
+        <div class="formula">f(t) = Σ cₙeⁱⁿᵗ</div>
+    </header>
+
+    <main>
+        <section class="intro">
+            <div>
+                <p class="kicker">FROM WAVES TO DRAWINGS</p>
+                <h2>Rotating circles can draw almost anything.</h2>
+                <p class="description">
+                    Draw a shape or choose a preset. Fourier analysis breaks the
+                    path into rotating circles, then adds those simple waves back
+                    together to reconstruct the drawing.
+                </p>
+            </div>
+
+            <div class="stats">
+                <div>
+                    <span>TERMS</span>
+                    <b id="termValue">80</b>
+                </div>
+                <div>
+                    <span>POINTS</span>
+                    <b id="pointValue">0</b>
+                </div>
+                <div>
+                    <span>FPS</span>
+                    <b id="fpsValue">60</b>
+                </div>
+            </div>
+        </section>
+
+        <section class="lab">
+            <div class="canvas-wrap">
+                <canvas id="canvas"></canvas>
+
+                <div class="canvas-hint" id="canvasHint">
+                    Draw a shape here
+                </div>
+
+                <div class="draw-status" id="drawStatus">
+                    <span class="dot"></span>
+                    DRAW MODE
+                </div>
+            </div>
+
+            <aside class="controls">
+                <div class="control-block">
+                    <div class="label-row">
+                        <span>PRESETS</span>
+                    </div>
+
+                    <div class="preset-grid">
+                        <button data-preset="heart">heart</button>
+                        <button data-preset="star">star</button>
+                        <button data-preset="circle">circle</button>
+                        <button data-preset="infinity">infinity</button>
+                        <button data-preset="spiral">spiral</button>
+                        <button data-preset="wave">wave</button>
+                    </div>
+                </div>
+
+                <div class="control-block">
+                    <div class="label-row">
+                        <span>FOURIER TERMS</span>
+                        <b id="termsLabel">80</b>
+                    </div>
+                    <input id="terms" type="range" min="1" max="150" value="80">
+                </div>
+
+                <div class="control-block">
+                    <div class="label-row">
+                        <span>SPEED</span>
+                        <b id="speedLabel">1.0×</b>
+                    </div>
+                    <input id="speed" type="range" min="0.1" max="4" step="0.1" value="1">
+                </div>
+
+                <div class="control-block">
+                    <div class="label-row">
+                        <span>TRAIL</span>
+                        <b id="trailLabel">100%</b>
+                    </div>
+                    <input id="trail" type="range" min="10" max="100" value="100">
+                </div>
+
+                <div class="control-block toggles">
+                    <label>
+                        <input id="showCircles" type="checkbox" checked>
+                        <span>show circles</span>
+                    </label>
+
+                    <label>
+                        <input id="showLines" type="checkbox" checked>
+                        <span>show connectors</span>
+                    </label>
+
+                    <label>
+                        <input id="showOriginal" type="checkbox">
+                        <span>show original path</span>
+                    </label>
+                </div>
+
+                <div class="buttons">
+                    <button class="primary" id="animate">pause</button>
+                    <button id="clear">clear drawing</button>
+                    <button id="reset">reset preset</button>
+                </div>
+
+                <div class="explain">
+                    <span class="label">WHAT'S HAPPENING?</span>
+                    <p>
+                        A complicated drawing is being represented as a sum of
+                        simple rotating vectors. More Fourier terms means more
+                        frequencies, which means a more accurate reconstruction.
+                    </p>
+                    <code>f(t) = Σ cₙ · eⁱⁿᵗ</code>
+                </div>
+            </aside>
+        </section>
+
+        <section class="bottom">
+            <div>
+                <span class="section-label">THE IDEA</span>
+                <h3>Complex shapes are hiding simple waves.</h3>
+            </div>
+
+            <p>
+                Fourier analysis says that complicated periodic signals can be
+                decomposed into simpler sinusoidal components. Here, each
+                component becomes a rotating vector — an <b>epicycle</b>.
+                Add enough of them together and the endpoint traces the original
+                shape.
+            </p>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

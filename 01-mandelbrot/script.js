@@ -1,0 +1,512 @@
+const $=s=>document.querySelector(s);
+const stage=$("#stage"), jcanvas=$("#julia"), jctx=jcanvas.getContext("2d");
+let canvas=$("#view");
+const FORCE_CPU=new URLSearchParams(location.search).has("cpu");
+const REDUCED=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const BAIL=1e4, MAXIT=20000;
+
+// ---------- double-double numbers ----------
+// the center of the view needs way more than 16 digits once you are deep, so it lives in a
+// pair of doubles [hi, lo] where lo carries the rounding error of hi. about 32 digits total.
+const SPLIT=134217729;
+function twoSum(a,b){ const s=a+b, bb=s-a; return [s,(a-(s-bb))+(b-bb)]; }
+function qts(s,e){ const h=s+e; return [h,e-(h-s)]; }
+function ddAdd(a,b){ let [s,e]=twoSum(a[0],b[0]); const [t,f]=twoSum(a[1],b[1]); e+=t; [s,e]=qts(s,e); e+=f; return qts(s,e); }
+function ddAddD(a,b){ let [s,e]=twoSum(a[0],b); e+=a[1]; return qts(s,e); }
+function ddSub(a,b){ return ddAdd(a,[-b[0],-b[1]]); }
+function ddMulD(a,b){ const p=a[0]*b, t=SPLIT*a[0], ah=t-(t-a[0]), al=a[0]-ah, u=SPLIT*b, bh=u-(u-b), bl=b-bh;
+  const e=((ah*bh-p)+ah*bl+al*bh)+al*bl+a[1]*b; return qts(p,e); }
+function dd(x){ return [x,0]; }
+function ddNum(a){ return a[0]+a[1]; }
+// exact decimal in and out, via bigint, so deep positions survive a trip through the url
+const DEC=48n, DECN=48;
+function bigOf(x){ const s=x.toFixed(DECN), neg=s[0]==="-", [i,f]=s.replace("-","").split("."); const b=BigInt(i+f); return neg?-b:b; }
+function ddToStr(a,digits){
+  digits=Math.max(2,Math.min(DECN,digits));
+  let b=bigOf(a[0])+bigOf(a[1]); const neg=b<0n; if(neg) b=-b;
+  const sc=10n**(DEC-BigInt(digits)); b=(b+sc/2n)/sc;
+  let s=b.toString().padStart(digits+1,"0"); s=s.slice(0,-digits)+"."+s.slice(-digits);
+  return (neg?"-":"")+s;
+}
+function strToDD(str){
+  const hi=parseFloat(str); if(!isFinite(hi)) return null;
+  if(!/^-?\d*\.?\d*$/.test(str.trim())) return dd(hi);
+  const t=str.trim(), neg=t[0]==="-", [i,f=""]=t.replace("-","").split(".");
+  const big=BigInt((i||"0")+f.slice(0,DECN).padEnd(DECN,"0"))*(neg?-1n:1n);
+  return qts(hi, Number(big-bigOf(hi))/1e48);
+}
+// the reference orbit in double-double: one point iterated with 32-digit precision.
+// written out by hand so the inner loop does not allocate.
+function refOrbitDD(cxh,cxl,cyh,cyl,it,a){
+  let xh=0,xl=0,yh=0,yl=0,M=it; a[0]=0;a[1]=0;
+  for(let k=1;k<=it;k++){
+    let p=xh*xh, t=SPLIT*xh, hh=t-(t-xh), hl=xh-hh, e=((hh*hh-p)+2*hh*hl)+hl*hl+2*xh*xl, x2h=p+e, x2l=e-(x2h-p);
+    p=yh*yh; t=SPLIT*yh; hh=t-(t-yh); hl=yh-hh; e=((hh*hh-p)+2*hh*hl)+hl*hl+2*yh*yl; const y2h=p+e, y2l=e-(y2h-p);
+    p=xh*yh; t=SPLIT*xh; const ah=t-(t-xh), al=xh-ah; t=SPLIT*yh; const bh=t-(t-yh), bl=yh-bh;
+    e=((ah*bh-p)+ah*bl+al*bh)+al*bl+xh*yl+xl*yh; const xyh=p+e, xyl=e-(xyh-p);
+    let s=x2h-y2h, bb=s-x2h, err=(x2h-(s-bb))+(-y2h-bb); err+=x2l-y2l; let nh=s+err, nl=err-(nh-s);
+    s=nh+cxh; bb=s-nh; err=(nh-(s-bb))+(cxh-bb); err+=nl+cxl; const xnh=s+err, xnl=err-(xnh-s);
+    const q=2*xyh; s=q+cyh; bb=s-q; err=(q-(s-bb))+(cyh-bb); err+=2*xyl+cyl; const ynh=s+err, ynl=err-(ynh-s);
+    xh=xnh;xl=xnl;yh=ynh;yl=ynl;
+    a[2*k]=xh; a[2*k+1]=yh;
+    if(xh*xh+yh*yh>BAIL){ M=k; break; }
+  }
+  return M;
+}
+
+// ---------- view state ----------
+const HOME={cx:dd(-0.75),cy:dd(0),width:3.2};
+let cx=HOME.cx, cy=HOME.cy, width=HOME.width, palette="inferno", phase=0, autoIter=true, manualIter=500, maxIter=500;
+let W=0,H=0, juliaOn=true, moving=false, settleTimer=null, needsDraw=false, hashTimer=null;
+
+// iterations that make sense for a given zoom. grows with the log of the zoom,
+// so the whole set gets a few hundred and a hundred-million-x view gets a couple thousand.
+function autoIterFor(w){ const z=HOME.width/w; return Math.round(Math.min(MAXIT, 200+90*Math.pow(Math.max(0,Math.log10(z)),1.5))/25)*25; }
+function currentIter(){ return autoIter ? autoIterFor(width) : manualIter; }
+function digitsFor(w){ return Math.ceil(Math.log10(1/w))+5; }
+
+// ---------- palettes, blended in oklab so the midpoints don't go grey ----------
+const PALETTES={
+  inferno: [[0,0,4],[31,12,72],[85,15,109],[136,34,106],[186,54,85],[227,89,51],[249,140,10],[252,194,40],[245,235,130],[252,255,190],[240,180,60],[170,55,80],[60,10,90]],
+  ocean:   [[2,5,22],[6,25,80],[10,60,150],[20,120,205],[70,190,235],[190,240,250],[255,255,255],[150,215,240],[40,120,190],[10,45,120]],
+  aurora:  [[6,7,26],[12,40,75],[15,110,115],[40,190,130],[150,240,120],[235,250,190],[240,180,230],[180,90,210],[90,40,150],[30,15,70]],
+  candy:   [[30,20,50],[137,180,250],[148,226,213],[166,227,161],[249,226,175],[250,179,135],[243,139,168],[245,194,231],[203,166,247],[90,60,130]],
+  electric:[[0,0,0],[20,0,120],[0,60,255],[0,200,255],[190,255,255],[255,255,255],[255,120,220],[180,0,200],[70,0,120]],
+  sunset:  [[20,10,40],[60,25,90],[130,40,110],[210,70,90],[250,130,70],[255,200,110],[255,240,190],[240,170,150],[150,80,140],[60,30,90]],
+  twilight:[[226,217,226],[180,160,220],[110,100,200],[60,50,140],[30,20,60],[20,15,30],[70,20,40],[140,40,60],[200,100,90],[230,180,170]],
+  ink:     [[0,0,0],[22,24,34],[60,64,80],[130,136,160],[220,224,235],[255,255,255],[190,195,210],[90,95,115],[30,32,44]],
+};
+function srgb2lin(c){c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function lin2srgb(c){c=Math.max(0,Math.min(1,c));return 255*(c<=0.0031308?c*12.92:1.055*Math.pow(c,1/2.4)-0.055)}
+function rgb2oklab([r,g,b]){ r=srgb2lin(r);g=srgb2lin(g);b=srgb2lin(b);
+  const l=Math.cbrt(0.4122214708*r+0.5363325363*g+0.0514459929*b), m=Math.cbrt(0.2119034982*r+0.6806995451*g+0.1073969566*b), s=Math.cbrt(0.0883024619*r+0.2817188376*g+0.6299787005*b);
+  return [0.2104542553*l+0.7936177850*m-0.0040720468*s, 1.9779984951*l-2.4285922050*m+0.4505937099*s, 0.0259040371*l+0.7827717662*m-0.8086757660*s]; }
+function oklab2rgb([L,a,b]){ const l=(L+0.3963377774*a+0.2158037573*b)**3, m=(L-0.1055613458*a-0.0638541728*b)**3, s=(L-0.0894841775*a-1.2914855480*b)**3;
+  return [lin2srgb(4.0767416621*l-3.3077115913*m+0.2309699292*s), lin2srgb(-1.2684380046*l+2.6097574011*m-0.3413193965*s), lin2srgb(-0.0041960863*l-0.7034186147*m+1.7076147010*s)]; }
+const LUTN=2048, LUT=new Uint8ClampedArray(LUTN*4);
+function paletteColor(name,t){ // t in [0,1) around the loop, cosine-eased between stops so there are no kinks
+  const st=PALETTES[name], n=st.length; t=((t%1)+1)%1; const p=t*n, k=Math.floor(p), f=p-k, s=0.5-0.5*Math.cos(Math.PI*f);
+  const A=st[k], B=st[(k+1)%n], a=A.lab||(A.lab=rgb2oklab(A)), b=B.lab||(B.lab=rgb2oklab(B));
+  return oklab2rgb([a[0]+(b[0]-a[0])*s, a[1]+(b[1]-a[1])*s, a[2]+(b[2]-a[2])*s]);
+}
+function buildLUT(){ for(let i=0;i<LUTN;i++){ const [r,g,b]=paletteColor(palette,i/LUTN); LUT[i*4]=r;LUT[i*4+1]=g;LUT[i*4+2]=b;LUT[i*4+3]=255; } if(gpu) gpu.uploadLut(); }
+function cssGradient(name){ const s=[]; for(let i=0;i<=24;i++){ const [r,g,b]=paletteColor(name,i/24); s.push(`rgb(${r|0},${g|0},${b|0})`);} return `linear-gradient(90deg,${s.join(",")})`; }
+// smooth count in, rgb out. a gentle log ramp handles the calm outside, the sqrt term gives
+// the busy edge full color cycles instead of one flat tone. identical formula in the shader.
+function colorAt(v,density,d,o){
+  if(v<0){ d[o]=0;d[o+1]=0;d[o+2]=0;d[o+3]=255; return; }
+  const t=(0.10*Math.log2(1+v)+0.085*Math.sqrt(v)-0.18)*density+phase/100, k=((Math.floor((((t%1)+1)%1)*LUTN))&(LUTN-1))*4;
+  d[o]=LUT[k];d[o+1]=LUT[k+1];d[o+2]=LUT[k+2];d[o+3]=255;
+}
+
+// ---------- the gpu path: webgl2 + perturbation ----------
+let gpu=null;
+const orbit64=new Float64Array((MAXIT+1)*2), orbit32=new Float32Array(Math.ceil((MAXIT+1)*2/4096)*4096);
+function initGPU(){
+  let gl; try{ gl=canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:false,powerPreference:"high-performance"}); }catch(e){ gl=null; }
+  if(!gl) return null;
+  const VS=`#version 300 es
+    void main(){ vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2)); gl_Position=vec4(p*2.0-1.0,0.0,1.0); }`;
+  const FS=`#version 300 es
+    precision highp float; precision highp int;
+    uniform vec2 uRes, uPix, uC0; uniform int uMaxIter, uRefLen, uBulbs;
+    uniform sampler2D uOrbit, uLut; uniform float uPhase;
+    out vec4 fragColor;
+    vec2 orbit(int n){ return texelFetch(uOrbit, ivec2(n&2047, n>>11), 0).rg; }
+    void main(){
+      // offset of this pixel from the reference point at the center of the screen
+      vec2 dc=vec2((gl_FragCoord.x-0.5*uRes.x)*uPix.x, (0.5*uRes.y-gl_FragCoord.y)*uPix.y);
+      if(uBulbs==1){ vec2 c=uC0+dc; float q=(c.x-0.25)*(c.x-0.25)+c.y*c.y;
+        if(q*(q+(c.x-0.25))<=0.25*c.y*c.y || (c.x+1.0)*(c.x+1.0)+c.y*c.y<=0.0625){ fragColor=vec4(0,0,0,1); return; } }
+      vec2 dz=vec2(0.0); int n=0; float v=-1.0;
+      for(int i=0;i<uMaxIter;i++){
+        vec2 Z=orbit(n);
+        dz=2.0*vec2(Z.x*dz.x-Z.y*dz.y, Z.x*dz.y+Z.y*dz.x)+vec2(dz.x*dz.x-dz.y*dz.y, 2.0*dz.x*dz.y)+dc;
+        n++;
+        vec2 z=orbit(n)+dz; float zz=dot(z,z);
+        if(zz>1e4){ v=float(i+2)-log2(0.5*log(zz)/0.6931471805599453); break; }
+        if(n>=uRefLen || zz<dot(dz,dz)){ dz=z; n=0; }   // rebase onto the start of the orbit
+      }
+      if(v<0.0){ fragColor=vec4(0,0,0,1); return; }
+      v=max(v,0.0); float t=0.10*log2(1.0+v)+0.085*sqrt(v)-0.18+uPhase;
+      fragColor=vec4(texture(uLut, vec2(t,0.5)).rgb, 1.0);
+    }`;
+  const BLIT=`#version 300 es
+    precision highp float; uniform sampler2D uTex; uniform vec2 uRes; out vec4 o;
+    void main(){ o=texture(uTex, gl_FragCoord.xy/uRes); }`;
+  function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+  function prog(fs){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; }
+  let P,B; try{ P=prog(FS); B=prog(BLIT); }catch(e){ console.warn("shader failed, using cpu", e); return null; }
+  const U=n=>gl.getUniformLocation(P,n), u={res:U("uRes"),pix:U("uPix"),c0:U("uC0"),maxIter:U("uMaxIter"),refLen:U("uRefLen"),bulbs:U("uBulbs"),orbit:U("uOrbit"),lut:U("uLut"),phase:U("uPhase")};
+  const bu={tex:gl.getUniformLocation(B,"uTex"),res:gl.getUniformLocation(B,"uRes")};
+  const orbitTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,orbitTex);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const lutTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,lutTex);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  // offscreen target for reduced-resolution frames while moving on slow gpus
+  const fbo=gl.createFramebuffer(), fboTex=gl.createTexture(); let fw=0,fh=0;
+  gl.bindTexture(gl.TEXTURE_2D,fboTex);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+  const g={gl, mscale:1, frameTimes:[]};
+  g.uploadLut=()=>{ gl.bindTexture(gl.TEXTURE_2D,lutTex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,LUTN,1,0,gl.RGBA,gl.UNSIGNED_BYTE,LUT); };
+  g.draw=(scale)=>{
+    const rw=Math.max(1,Math.round(W*scale)), rh=Math.max(1,Math.round(H*scale));
+    const it=maxIter, M=refOrbitDD(cx[0],cx[1],cy[0],cy[1],it,orbit64);
+    const rows=Math.ceil((M+1)/2048); orbit32.set(orbit64.subarray(0,(M+1)*2));
+    gl.bindTexture(gl.TEXTURE_2D,orbitTex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RG32F,2048,rows,0,gl.RG,gl.FLOAT,orbit32.subarray(0,rows*4096));
+    const off=scale<1;
+    if(off){ if(fw!==rw||fh!==rh){ gl.bindTexture(gl.TEXTURE_2D,fboTex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,rw,rh,0,gl.RGBA,gl.UNSIGNED_BYTE,null); fw=rw;fh=rh; }
+      gl.bindFramebuffer(gl.FRAMEBUFFER,fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,fboTex,0); }
+    else gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    gl.viewport(0,0,rw,rh); gl.useProgram(P);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,orbitTex); gl.uniform1i(u.orbit,0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,lutTex); gl.uniform1i(u.lut,1);
+    gl.uniform2f(u.res,rw,rh); gl.uniform2f(u.pix,width/rw,(width*H/W)/rh); gl.uniform2f(u.c0,cx[0],cy[0]);
+    gl.uniform1i(u.maxIter,it); gl.uniform1i(u.refLen,M); gl.uniform1i(u.bulbs,width>1e-3?1:0);
+    gl.uniform1f(u.phase,phase/100);
+    // split heavy frames into bands so no single draw call runs long enough to upset a gpu watchdog
+    const bands=Math.max(1,Math.min(64,Math.ceil(it*rw*rh/4e8)));
+    if(bands>1) gl.enable(gl.SCISSOR_TEST);
+    for(let b=0;b<bands;b++){ const y0=Math.floor(rh*b/bands), y1=Math.floor(rh*(b+1)/bands); if(bands>1) gl.scissor(0,y0,rw,y1-y0); gl.drawArrays(gl.TRIANGLES,0,3); }
+    if(bands>1) gl.disable(gl.SCISSOR_TEST);
+    if(off){ gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,W,H); gl.useProgram(B);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,fboTex); gl.uniform1i(bu.tex,0); gl.uniform2f(bu.res,W,H); gl.drawArrays(gl.TRIANGLES,0,3); }
+  };
+  // wait for the gpu to actually finish, without blocking, so the hud can show a real number
+  g.timeFrame=(t0)=>{
+    const sync=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0); gl.flush();
+    const poll=()=>{ const s=gl.clientWaitSync(sync,0,0);
+      if(s===gl.TIMEOUT_EXPIRED){ setTimeout(poll,3); return; }
+      gl.deleteSync(sync); if(!moving) setHudTime(performance.now()-t0); };
+    setTimeout(poll,2);
+  };
+  // adaptive quality while moving: if frames come in slow, render smaller and upscale
+  g.noteFrame=(dt)=>{ const f=g.frameTimes; f.push(dt); if(f.length>8) f.shift();
+    if(f.length>=4){ const avg=f.reduce((a,b)=>a+b,0)/f.length;
+      if(avg>26&&g.mscale>0.25){ g.mscale=Math.max(0.25,g.mscale/1.5); f.length=0; }
+      else if(avg<11&&g.mscale<1){ g.mscale=Math.min(1,g.mscale*1.5); f.length=0; } } };
+  const mine=canvas; mine.addEventListener("webglcontextlost",e=>{ e.preventDefault(); if(mine===canvas&&gpu&&gpu.gl===gl) switchToCPU(); },{once:true});
+  return g;
+}
+
+// ---------- the cpu path: web workers, strips, a pull queue ----------
+const cpu={on:false, ctx:null, frame:null, fctx:null, fimg:null, fview:null, tmp:null, lo:null, workers:[], job:null, full:null, jobId:0, t0:0};
+function initCPU(){
+  cpu.on=true; cpu.ctx=canvas.getContext("2d"); cpu.ctx.imageSmoothingEnabled=true; cpu.ctx.imageSmoothingQuality="high";
+  if(!cpu.frame){ cpu.frame=document.createElement("canvas"); cpu.fctx=cpu.frame.getContext("2d"); cpu.tmp=document.createElement("canvas"); cpu.lo=document.createElement("canvas"); }
+  cpu.fview=null; cpu.full=null; cpu.job=null;
+  if(!cpu.workers.length){ const NW=Math.max(2,Math.min(16,navigator.hardwareConcurrency||4));
+    for(let i=0;i<NW;i++){ const w=new Worker(wurl); w.busy=false; w.onmessage=onStrip; cpu.workers.push(w); } }
+  for(const w of cpu.workers) w.busy=false;
+}
+function switchToCPU(){ setEngine("cpu"); } // the webgl context died: carry on in software
+// swap engines live. a canvas can only ever have one kind of context, so we replace the element.
+function setEngine(mode){
+  if(mode==="gpu"&&gpu) return; if(mode==="cpu"&&cpu.on) return;
+  stopGlide(); if(cpu.job) cpu.job=null; $("#prog").classList.remove("on");
+  if(gpu){ try{ gpu.gl.getExtension("WEBGL_lose_context")?.loseContext(); }catch(e){} gpu=null; }
+  const c=document.createElement("canvas"); c.id="view"; canvas.replaceWith(c); canvas=c;
+  cpu.on=false;
+  if(mode==="gpu"){ gpu=initGPU(); if(!gpu) mode="cpu"; }
+  if(mode==="cpu") initCPU();
+  fit(); buildLUT(); requestDraw(); settle(); syncEngineUI(); updateHud();
+}
+function syncEngineUI(){ $("#engGpu").classList.toggle("on",!!gpu); $("#engCpu").classList.toggle("on",!gpu); }
+function makeJob(scale){
+  const w=Math.max(1,Math.round(W*scale)), h=Math.max(1,Math.round(H*scale)), hp=width*H/W;
+  const j={id:++cpu.jobId, scale, w, h, dx:width/w, dy:hp/h, maxIter, view:{cx,cy,width},
+    strip:scale<1?Math.max(2,Math.ceil(h/cpu.workers.length)):6, next:0, done:0, vals:new Float32Array(w*h), img:null};
+  j.total=Math.ceil(h/j.strip); if(scale<1) j.img=new ImageData(w,h);
+  // every worker gets this job's reference orbit once, then pulls strips against it
+  if(width>1e-11){ for(const wk of cpu.workers) wk.postMessage({type:"orbit",job:j.id,Z:null,M:0}); }
+  else { const M=refOrbitDD(cx[0],cx[1],cy[0],cy[1],maxIter,orbit64), Z=orbit64.slice(0,(M+1)*2);
+    for(const wk of cpu.workers) wk.postMessage({type:"orbit",job:j.id,Z,M}); }
+  return j;
+}
+function feed(w){ const j=cpu.job; if(!j||j.next>=j.h){ w.busy=false; return; }
+  const y0=j.next, y1=Math.min(j.h,y0+j.strip); j.next=y1; w.busy=true;
+  w.postMessage({job:j.id,y0,y1,w:j.w,h:j.h,dx:j.dx,dy:j.dy,maxIter:j.maxIter,bulbs:width>1e-3,c0r:cx[0],c0i:cy[0],direct:width>1e-11}); }
+function feedAll(){ for(const w of cpu.workers) if(!w.busy) feed(w); }
+function onStrip(e){
+  const m=e.data, j=cpu.job;
+  if(!j||m.job!==j.id||!m.out){ feed(e.target); return; }
+  j.vals.set(m.out,m.y0*j.w);
+  if(j.scale===1){ const d=cpu.fimg.data; for(let i=m.y0*W,o=i*4;i<m.y1*W;i++,o+=4) colorAt(j.vals[i],1,d,o);
+    cpu.fctx.putImageData(cpu.fimg,0,0,0,m.y0,W,m.y1-m.y0); requestDraw();
+    $("#prog").style.width=(100*(j.done+1)/j.total)+"%"; }
+  else { const d=j.img.data; for(let i=m.y0*j.w,o=i*4;i<m.y1*j.w;i++,o+=4) colorAt(j.vals[i],1,d,o); }
+  if(++j.done===j.total) completeJob(j);
+  feed(e.target);
+}
+function completeJob(j){
+  if(j.scale<1){
+    cpu.lo.width=j.w; cpu.lo.height=j.h; cpu.lo.getContext("2d").putImageData(j.img,0,0);
+    cpu.fctx.imageSmoothingEnabled=true; cpu.fctx.drawImage(cpu.lo,0,0,W,H); cpu.fview=j.view; requestDraw();
+    cpu.job=makeJob(1); $("#prog").style.width="0%"; $("#prog").classList.add("on"); feedAll();
+  } else {
+    cpu.full={vals:j.vals,view:j.view}; cpu.job=null; $("#prog").classList.remove("on");
+    setHudTime(performance.now()-cpu.t0); requestDraw();
+  }
+}
+function sameView(a,b){ return a&&b&&a.cx===b.cx&&a.cy===b.cy&&a.width===b.width; }
+// where the last finished frame lands on screen for the current view
+function frameRect(v){ const s=v.width/width; return [ ddNum(ddSub(v.cx,cx))/width*W+W/2-s*W/2, ddNum(ddSub(v.cy,cy))/width*W+H/2-s*H/2, s*W, s*H ]; }
+function cpuComposite(){
+  const c=cpu.ctx; c.fillStyle="#000"; c.fillRect(0,0,W,H);
+  if(cpu.fview){ const [x,y,w,h]=frameRect(cpu.fview); c.drawImage(cpu.frame,x,y,w,h); }
+}
+function cpuSettle(){
+  cpu.job=null; cpu.t0=performance.now();
+  const v={cx,cy,width};
+  const covered = cpu.fview && cpu.fview.width/width<=4 && (()=>{ const [x,y,w,h]=frameRect(cpu.fview); return x<=0&&y<=0&&x+w>=W&&y+h>=H; })();
+  if(covered){ // the old frame already covers the screen well enough: keep it and refine in place
+    const t=cpu.tmp.getContext("2d"), [x,y,w,h]=frameRect(cpu.fview);
+    t.fillStyle="#000"; t.fillRect(0,0,W,H); t.imageSmoothingEnabled=true; t.imageSmoothingQuality="high"; t.drawImage(cpu.frame,x,y,w,h);
+    cpu.fctx.drawImage(cpu.tmp,0,0); cpu.fview=v;
+    cpu.job=makeJob(1); $("#prog").style.width="0%"; $("#prog").classList.add("on");
+  } else cpu.job=makeJob(1/6);
+  feedAll();
+}
+function cpuRecolor(){
+  if(cpu.full&&sameView(cpu.full.view,cpu.fview)){ const d=cpu.fimg.data, v=cpu.full.vals; for(let i=0,o=0;i<W*H;i++,o+=4) colorAt(v[i],1,d,o); cpu.fctx.putImageData(cpu.fimg,0,0); requestDraw(); }
+  if(!moving&&cpu.job) cpuSettle();
+}
+
+// ---------- shared plumbing ----------
+const wurl="worker.js";
+function fit(){
+  const r=stage.getBoundingClientRect(), dpr=Math.min(devicePixelRatio||1,2);
+  // size to the viewport, not a fixed cap. on a laptop the explorer takes most
+  // of the screen height; on a phone it goes tall so the fractal is the page.
+  const vh=window.innerHeight||800, phone=window.innerWidth<700;
+  const cssH=phone?Math.max(420,vh*0.72):Math.max(480,Math.min(vh*0.82,r.width*0.7));
+  W=Math.max(1,Math.floor(r.width*dpr)); H=Math.max(1,Math.floor(cssH*dpr));
+  canvas.width=W; canvas.height=H; canvas.style.height=(H/dpr)+"px";
+  if(cpu.on){ cpu.frame.width=W; cpu.frame.height=H; cpu.tmp.width=W; cpu.tmp.height=H; cpu.fimg=new ImageData(W,H); cpu.fview=null; cpu.full=null; cpu.job=null; $("#prog").classList.remove("on"); }
+}
+function requestDraw(){ needsDraw=true; }
+let lastFrameAt=0;
+function draw(){
+  maxIter=currentIter();
+  if(gpu){
+    const t0=performance.now();
+    gpu.draw(moving?gpu.mscale:1);
+    if(moving){ if(lastFrameAt) gpu.noteFrame(t0-lastFrameAt); lastFrameAt=t0; } else { lastFrameAt=0; gpu.timeFrame(t0); }
+  } else cpuComposite();
+  updateHud();
+}
+function loop(){ requestAnimationFrame(loop); if(glide) stepGlide(performance.now()); if(needsDraw){ needsDraw=false; draw(); } }
+
+// every input funnels through here. while moving we draw cheap frames; once input stops we settle.
+function viewChanged(){
+  moving=true; requestDraw(); if(cpu.on&&cpu.job){ cpu.job=null; $("#prog").classList.remove("on"); }
+  clearTimeout(settleTimer); settleTimer=setTimeout(settle,90);
+}
+function settle(){
+  clearTimeout(settleTimer); moving=false; maxIter=currentIter(); syncIterUI(); requestDraw();
+  if(cpu.on) cpuSettle();
+  clearTimeout(hashTimer); hashTimer=setTimeout(writeHash,250);
+  markSpot();
+}
+function recolor(){ buildLUT(); if(gpu) requestDraw(); else cpuRecolor(); drawJuliaCached(); }
+
+function fmtZoom(){ const z=HOME.width/width; return (z>=1e6?z.toExponential(2):z<10?z.toFixed(2):Math.round(z).toLocaleString("en-US"))+"x"; }
+function updateHud(){
+  const dg=Math.max(12,digitsFor(width));
+  $("#hzoom").textContent=fmtZoom(); $("#hre").textContent=ddToStr(cx,dg); $("#him").textContent=ddToStr(cy,dg);
+  $("#hit").textContent=maxIter.toLocaleString("en-US")+(autoIter?" auto":"");
+  const e=$("#heng"); if(gpu){ e.textContent="gpu"+(moving&&gpu.mscale<1?" · "+Math.round(gpu.mscale*100)+"% res":""); e.classList.remove("cpu"); }
+  else { e.textContent="cpu · "+cpu.workers.length+" workers"; e.classList.add("cpu"); }
+  if(moving) $("#htime").textContent="rendering";
+}
+function setHudTime(ms){ $("#htime").textContent=(ms<1?"<1":ms.toFixed(0))+" ms"; }
+function writeHash(){ const dg=Math.max(16,digitsFor(width)); lastHash=`#${ddToStr(cx,dg)},${ddToStr(cy,dg)},${width},${autoIter?"auto":manualIter},${palette},${phase}`; history.replaceState(null,"",lastHash); }
+function syncIterUI(){ const it=currentIter(); $("#iter").value=it; $("#iterv").textContent=it.toLocaleString("en-US"); $("#auto").classList.toggle("on",autoIter); sliderFill($("#iter")); }
+function sliderFill(el){ el.style.setProperty("--p",(100*(el.value-el.min)/(el.max-el.min))+"%"); }
+
+// ---------- julia preview, in its own worker ----------
+const jworker=new Worker(wurl); let jBusy=false, jPending=null, jVals=null;
+jworker.onmessage=e=>{ jBusy=false; jVals=e.data; paintJulia(); if(jPending){ const p=jPending; jPending=null; requestJulia(p[0],p[1]); } };
+function requestJulia(cr,ci){ if(jBusy){ jPending=[cr,ci]; return; } jBusy=true; jworker.postMessage({type:"julia",cr,ci,w:jcanvas.width,h:jcanvas.height,max:300}); }
+function paintJulia(){ if(!jVals) return; const {out,w,h}=jVals, im=jctx.createImageData(w,h), d=im.data; for(let i=0,o=0;i<w*h;i++,o+=4) colorAt(out[i],1.4,d,o); jctx.putImageData(im,0,0); }
+function drawJuliaCached(){ if(jVals) paintJulia(); }
+function juliaAt(px,py){ if(!juliaOn) return; const [r,i]=pixelToPlane(px,py); jcanvas.classList.add("on"); $("#jlabel").classList.add("on"); requestJulia(r,i); }
+function juliaOff(){ jcanvas.classList.remove("on"); $("#jlabel").classList.remove("on"); }
+
+// ---------- navigation ----------
+// plain doubles are fine here: the julia preview does not care about the 20th digit
+function pixelToPlane(px,py){ const h=width*H/W; return [cx[0]-width/2+px/W*width, cy[0]-h/2+py/H*h]; }
+function canvasXY(e){ const r=canvas.getBoundingClientRect(), s=W/r.width; return [(e.clientX-r.left)*s,(e.clientY-r.top)*s]; }
+// a glide is a path from one view to another. zooms move along the line toward the point that
+// stays fixed on screen, so it feels like flying in, and long jumps zoom out first then back in.
+let glide=null;
+function leg(c0,w0,c1,w1){
+  const r=w1/w0, dx=ddSub(c1.cx,c0.cx), dy=ddSub(c1.cy,c0.cy);
+  if(Math.abs(Math.log(r))<1e-4) return {len:Math.hypot(ddNum(dx),ddNum(dy))/w0*0.5+1e-6, at:s=>({cx:ddAdd(c0.cx,ddMulD(dx,s)),cy:ddAdd(c0.cy,ddMulD(dy,s)),width:w0})};
+  // center follows c0 + (c1-c0)*(1-k)/(1-r) with k=r^s, which is the same as flying straight
+  // toward the point that stays fixed on screen, written so it stays exact in double-double
+  return {len:Math.abs(Math.log2(r)), at:s=>{ const k=Math.pow(r,s), f=(1-k)/(1-r); return {cx:ddAdd(c0.cx,ddMulD(dx,f)),cy:ddAdd(c0.cy,ddMulD(dy,f)),width:w0*k}; }};
+}
+function glideTo(tx,ty,tw,opts={}){
+  const c0={cx,cy}, c1={cx:tx,cy:ty}, w0=width;
+  const dist=Math.hypot(ddNum(ddSub(tx,cx)),ddNum(ddSub(ty,cy))), wMid=Math.max(w0,tw,dist*2.4);
+  let legs;
+  if(wMid>Math.max(w0,tw)*1.6){ const cm={cx:ddAdd(cx,ddMulD(ddSub(tx,cx),0.5)),cy:ddAdd(cy,ddMulD(ddSub(ty,cy),0.5))}; legs=[leg(c0,w0,cm,wMid),leg(cm,wMid,c1,tw)]; }
+  else legs=[leg(c0,w0,c1,tw)];
+  const total=legs.reduce((a,l)=>a+l.len,0);
+  let dur=opts.dur ?? Math.min(2600, 380+230*total); if(REDUCED) dur*=0.35;
+  glide={start:performance.now(),dur,legs,total,ease:opts.ease||"inout",end:{cx:tx,cy:ty,width:tw}};
+}
+function stepGlide(now){
+  const g=glide; let s=Math.min(1,(now-g.start)/g.dur);
+  s = g.ease==="out" ? 1-Math.pow(1-s,3) : (s<0.5 ? 4*s*s*s : 1-Math.pow(-2*s+2,3)/2);
+  let d=s*g.total, p=null;
+  for(const l of g.legs){ if(d<=l.len||l===g.legs[g.legs.length-1]){ p=l.at(Math.min(1,d/l.len)); break; } d-=l.len; }
+  if(s>=1) p=g.end;   // land exactly on the target, no accumulated rounding
+  cx=p.cx; cy=p.cy; width=p.width;
+  moving=true; requestDraw(); if(cpu.on&&cpu.job){ cpu.job=null; $("#prog").classList.remove("on"); }
+  if(s>=1){ glide=null; settle(); }
+}
+function stopGlide(){ glide=null; }
+function targetOf(){ return glide ? glide.end : {cx,cy,width}; } // chain from where a running glide is going
+function zoomAt(px,py,factor,dur){
+  const t=targetOf(), tw=t.width/factor;
+  // the point under (px,py) stays put: shift the center by its screen offset times the change in width
+  const nx=ddAddD(t.cx,(px/W-0.5)*(t.width-tw)), ny=ddAddD(t.cy,(py/H-0.5)*(t.width-tw)*H/W);
+  glideTo(nx,ny,tw,{dur,ease:"out"});
+}
+function panBy(fx,fy){ const t=targetOf(); glideTo(ddAddD(t.cx,fx*t.width),ddAddD(t.cy,fy*t.width),t.width,{dur:260,ease:"out"}); }
+
+let drag=null;
+stage.addEventListener("mousedown",e=>{ if(e.button!==0) return; drag={x:e.clientX,y:e.clientY,cx,cy,moved:false}; });
+window.addEventListener("mousemove",e=>{
+  if(drag){
+    const r=canvas.getBoundingClientRect(), s=W/r.width, ddx=(e.clientX-drag.x)*s, ddy=(e.clientY-drag.y)*s;
+    if(!drag.moved&&Math.abs(ddx)+Math.abs(ddy)>4){ drag.moved=true; stopGlide(); stage.classList.add("grabbing"); juliaOff(); }
+    if(drag.moved){ cx=ddAddD(drag.cx,-ddx*(width/W)); cy=ddAddD(drag.cy,-ddy*(width/W)); viewChanged(); }
+  } else if(e.target===canvas){ const [px,py]=canvasXY(e); juliaAt(px,py); }
+});
+stage.addEventListener("mouseleave",juliaOff);
+window.addEventListener("mouseup",e=>{
+  if(!drag) return; stage.classList.remove("grabbing");
+  if(!drag.moved&&e.target===canvas){ const [px,py]=canvasXY(e); zoomAt(px,py,e.shiftKey?1/3:3); hideHint(); }
+  drag=null;
+});
+stage.addEventListener("wheel",e=>{
+  e.preventDefault(); const [px,py]=canvasXY(e);
+  const ticks=Math.max(-3,Math.min(3,(e.deltaMode===1?e.deltaY*20:e.deltaY)/100));
+  zoomAt(px,py,Math.pow(1.4,-ticks),240); hideHint();
+},{passive:false});
+stage.addEventListener("dblclick",e=>e.preventDefault());
+// touch: one finger pans, a tap glides in, two fingers pinch
+let touch=null, pinch=null;
+stage.addEventListener("touchstart",e=>{
+  if(e.touches.length===2){ stopGlide(); const [a,b]=e.touches; pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),mx:(a.clientX+b.clientX)/2,my:(a.clientY+b.clientY)/2,cx,cy,width}; touch=null; }
+  else if(e.touches.length===1){ const t=e.touches[0]; touch={x:t.clientX,y:t.clientY,cx,cy,moved:false,t:performance.now()}; }
+},{passive:true});
+stage.addEventListener("touchmove",e=>{
+  const r=canvas.getBoundingClientRect(), s=W/r.width;
+  if(pinch&&e.touches.length===2){
+    const [a,b]=e.touches, d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY), mx=(a.clientX+b.clientX)/2, my=(a.clientY+b.clientY)/2;
+    const nw=pinch.width*pinch.d/Math.max(1,d);
+    // keep the point that was under the pinch midpoint under the (possibly moved) midpoint
+    const px0=(pinch.mx-r.left)*s, py0=(pinch.my-r.top)*s, px1=(mx-r.left)*s, py1=(my-r.top)*s;
+    width=nw;
+    cx=ddAddD(pinch.cx,(px0/W-0.5)*pinch.width-(px1/W-0.5)*nw);
+    cy=ddAddD(pinch.cy,((py0/H-0.5)*pinch.width-(py1/H-0.5)*nw)*H/W);
+    viewChanged(); return;
+  }
+  if(!touch||e.touches.length!==1) return; const t=e.touches[0];
+  const ddx=(t.clientX-touch.x)*s, ddy=(t.clientY-touch.y)*s;
+  if(!touch.moved&&Math.abs(ddx)+Math.abs(ddy)>6){ touch.moved=true; stopGlide(); }
+  if(touch.moved){ cx=ddAddD(touch.cx,-ddx*(width/W)); cy=ddAddD(touch.cy,-ddy*(width/W)); viewChanged(); }
+},{passive:true});
+stage.addEventListener("touchend",e=>{
+  if(pinch){ if(e.touches.length<2){ pinch=null; settleSoon(); } return; }
+  if(touch&&!touch.moved&&performance.now()-touch.t<400){ const r=canvas.getBoundingClientRect(), s=W/r.width; zoomAt((touch.x-r.left)*s,(touch.y-r.top)*s,3); hideHint(); }
+  touch=null;
+});
+// ios fires touchcancel when a call, notification, or system gesture steals the
+// touch. without this the drag state sticks and the next tap gets eaten.
+stage.addEventListener("touchcancel",()=>{ if(pinch){ pinch=null; settleSoon(); } touch=null; },{passive:true});
+function settleSoon(){ clearTimeout(settleTimer); settleTimer=setTimeout(settle,90); }
+document.addEventListener("keydown",e=>{
+  if(["INPUT","SELECT","TEXTAREA"].includes(e.target.tagName)||e.metaKey||e.ctrlKey) return;
+  if(e.key==="+"||e.key==="=") zoomAt(W/2,H/2,1.8,320);
+  else if(e.key==="-"||e.key==="_") zoomAt(W/2,H/2,1/1.8,320);
+  else if(e.key==="ArrowLeft") panBy(-0.1,0); else if(e.key==="ArrowRight") panBy(0.1,0);
+  else if(e.key==="ArrowUp") panBy(0,-0.1); else if(e.key==="ArrowDown") panBy(0,0.1);
+  else if(e.key==="r") glideTo(HOME.cx,HOME.cy,HOME.width);
+  else if(e.key==="j"){ juliaOn=!juliaOn; if(!juliaOn) juliaOff(); }
+  else return;
+  e.preventDefault();
+});
+
+// ---------- controls ----------
+$("#reset").onclick=()=>glideTo(HOME.cx,HOME.cy,HOME.width);
+$("#zoomIn").onclick=()=>zoomAt(W/2,H/2,2,420);
+$("#zoomOut").onclick=()=>zoomAt(W/2,H/2,0.5,420);
+$("#phase").oninput=e=>{ phase=+e.target.value; $("#phasev").textContent=phase; sliderFill(e.target); recolor(); clearTimeout(hashTimer); hashTimer=setTimeout(writeHash,250); };
+$("#iter").oninput=e=>{ autoIter=false; manualIter=+e.target.value; maxIter=manualIter; syncIterUI(); if(gpu) requestDraw(); };
+$("#iter").onchange=()=>settle();
+$("#auto").onclick=()=>{ autoIter=!autoIter; if(!autoIter) manualIter=currentIter(); settle(); };
+$("#save").onclick=()=>{ if(gpu) draw(); const a=document.createElement("a"); a.download=`mandelbrot-${fmtZoom()}.png`; a.href=canvas.toDataURL("image/png"); a.click(); };
+$("#share").onclick=async()=>{ writeHash(); try{ await navigator.clipboard.writeText(location.href); $("#share").textContent="copied"; setTimeout(()=>$("#share").textContent="copy link",1400);}catch{ prompt("copy this link", location.href);} };
+for(const name of Object.keys(PALETTES)){
+  const b=document.createElement("button"); b.className="swatch"; b.title=name; b.setAttribute("aria-label",name+" palette");
+  b.style.background=cssGradient(name);
+  b.onclick=()=>{ palette=name; document.querySelectorAll(".swatch").forEach(s=>s.classList.toggle("on",s.title===name)); recolor(); clearTimeout(hashTimer); hashTimer=setTimeout(writeHash,250); };
+  $("#palettes").appendChild(b);
+}
+const SPOTS=[
+  ["the whole thing","-0.75","0",3.2,500],
+  ["seahorse valley","-0.7463","0.1102",0.005,1000],
+  ["elephant valley","0.2929859127507","0.0136572365",0.003,1000],
+  ["double spiral","-0.7453","0.1127",0.00065,1500],
+  ["mini mandelbrot","-1.7684","0.0009",0.004,1000],
+  ["lightning","-0.1592","-1.0317",0.002,1200],
+  ["the needle","-1.99999","0",0.00015,1500],
+  ["deep","-0.743643887037158704752191506114774","0.131825904205311970493132056385139",0.00000004,2500],
+  ["the island","-0.743643887037158704752191506114774","0.131825904205311970493132056385139",5e-11,3500],
+];
+for(const [name,x,y,w,it] of SPOTS){
+  const b=document.createElement("button"); b.textContent=name; b.spot={cx:strToDD(x),cy:strToDD(y),width:w};
+  b.onclick=()=>{ if(!autoIter){ manualIter=it; syncIterUI(); } glideTo(b.spot.cx,b.spot.cy,w); hideHint(); };
+  $("#spots").appendChild(b);
+}
+function markSpot(){ for(const b of $("#spots").children){ if(!b.spot) continue; const s=b.spot;
+  b.classList.toggle("on", Math.abs(ddNum(ddSub(s.cx,cx)))<width*0.02 && Math.abs(ddNum(ddSub(s.cy,cy)))<width*0.02 && Math.abs(Math.log(s.width/width))<0.05); } }
+function hideHint(){ $("#hint").classList.remove("on"); }
+function fromHash(){
+  const h=location.hash.slice(1).split(",");
+  if(h.length>=3&&+h[2]>0){
+    const x=strToDD(h[0]), y=strToDD(h[1]); if(!x||!y) return false;
+    cx=x; cy=y; width=+h[2];
+    if(h[3]&&h[3]!=="auto"&&!isNaN(+h[3])){ autoIter=false; manualIter=Math.max(100,Math.min(MAXIT,+h[3])); }
+    if(h[4]&&PALETTES[h[4]]) palette=h[4];
+    if(h[5]&&!isNaN(+h[5])) phase=Math.max(0,Math.min(100,+h[5]));
+    return true;
+  }
+  return false;
+}
+window.addEventListener("hashchange",()=>{ if(!location.hash.startsWith("#") || location.hash===lastHash) return; stopGlide(); if(fromHash()){ buildLUT(); $("#phase").value=phase; $("#phasev").textContent=phase; sliderFill($("#phase")); document.querySelectorAll(".swatch").forEach(s=>s.classList.toggle("on",s.title===palette)); settle(); } });
+let lastHash="";
+let rz=null; window.addEventListener("resize",()=>{ clearTimeout(rz); rz=setTimeout(()=>{ fit(); requestDraw(); settle(); },120); });
+
+// ---------- go ----------
+const hadHash=fromHash();
+$("#phase").value=phase; $("#phasev").textContent=phase; sliderFill($("#phase"));
+document.querySelectorAll(".swatch").forEach(s=>s.classList.toggle("on",s.title===palette));
+gpu=FORCE_CPU?null:initGPU(); if(!gpu) initCPU();
+// can this browser do webgl2 at all? if not, grey out the gpu button
+const canGL=!!(gpu||(()=>{ try{ return document.createElement("canvas").getContext("webgl2"); }catch(e){ return null; } })());
+if(!canGL){ $("#engGpu").disabled=true; $("#engGpu").title="webgl2 is not available in this browser"; }
+$("#engGpu").onclick=()=>setEngine("gpu"); $("#engCpu").onclick=()=>setEngine("cpu"); syncEngineUI();
+buildLUT(); fit(); syncIterUI(); settle(); requestAnimationFrame(loop);
+if(!hadHash) setTimeout(()=>{ $("#hint").classList.add("on"); setTimeout(hideHint,6000); },900);

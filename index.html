@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Lab : 50 Mathematical Experiments</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="hero">
+        <div class="eyebrow">MATHEMATICAL PLAYGROUND</div>
+
+        <h1>
+            MATH<span>//</span>LAB
+        </h1>
+
+        <p class="subtitle">
+            50 interactive experiments where equations become things
+            you can actually see, touch and break.
+        </p>
+
+        <div class="hero-meta">
+            <span><b id="experimentCount">02</b> experiments</span>
+            <span>HTML / CSS / JavaScript</span>
+            <span>no frameworks</span>
+        </div>
+    </header>
+
+    <main>
+        <section class="section-head">
+            <div>
+                <div class="section-label">THE COLLECTION</div>
+                <h2>Explore mathematics.</h2>
+            </div>
+
+            <div class="filters" id="filters">
+                <button class="filter active" data-category="all">all</button>
+                <button class="filter" data-category="number-theory">number theory</button>
+                <button class="filter" data-category="fractals">fractals</button>
+                <button class="filter" data-category="probability">probability</button>
+                <button class="filter" data-category="geometry">geometry</button>
+                <button class="filter" data-category="calculus">calculus</button>
+            </div>
+        </section>
+
+        <section class="grid" id="experimentGrid"></section>
+    </main>
+
+    <footer>
+        <span>MATH // LAB</span>
+        <span>built one experiment at a time.</span>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

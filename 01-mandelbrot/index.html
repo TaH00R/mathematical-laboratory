@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mandelbrot // observatory</title>
+  <meta name="description" content="an interactive Mandelbrot observatory — explore the boundary, zoom deep, and inspect Julia sets.">
+  <meta name="theme-color" content="#071018">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="eyebrow">FRACTAL OBSERVATORY / 01</div><h1>mandelbrot <span>// observatory</span></h1>
+    <p>one line of math, <b>z = z&sup2; + c</b>. Navigate the boundary, chase the spirals, and dive until the numbers give out.</p>
+  </header>
+  <main>
+    <div class="panel">
+      <div class="stage" id="stage">
+        <canvas id="view"></canvas>
+        <div class="prog" id="prog"></div>
+        <div class="hud" id="hud" aria-live="polite" aria-atomic="false">
+          <div class="zoom" id="hzoom">1.00x</div>
+          <div class="row"><span>re</span><b id="hre"></b></div>
+          <div class="row"><span>im</span><b id="him"></b></div>
+          <div class="row"><span>iterations</span><b id="hit"></b></div>
+          <div class="status"><span id="heng"></span><span id="htime"></span></div>
+        </div>
+        <div class="hint" id="hint">click to zoom in, scroll to zoom, drag to pan</div>
+        <div class="jlabel" id="jlabel">julia set at cursor</div>
+        <canvas id="julia" width="400" height="260"></canvas>
+      </div>
+      <div class="toolbar">
+        <button class="primary" id="reset">reset</button>
+        <div class="group"><span class="lbl">zoom</span><button id="zoomIn" title="zoom in">+</button><button id="zoomOut" title="zoom out">-</button></div>
+        <div class="group"><span class="lbl">palette</span><div class="swatches" id="palettes"></div></div>
+        <div class="group"><span class="lbl">shift</span><input id="phase" type="range" min="0" max="100" value="0"><span class="val" id="phasev">0</span></div>
+        <div class="group"><span class="lbl">detail</span><input id="iter" type="range" min="100" max="20000" step="50" value="500"><span class="val" id="iterv">500</span><button class="toggle on" id="auto" title="pick iterations from the zoom level">auto</button></div>
+        <div class="group seg"><span class="lbl">render</span><button class="toggle" id="engGpu" title="webgl2 fragment shader">gpu</button><button class="toggle" id="engCpu" title="web workers">cpu</button></div>
+        <button id="save">save png</button>
+        <button id="share">copy link</button>
+      </div>
+      <div class="spots" id="spots"><span class="lbl">places</span></div>
+      <div class="keys">
+        <span><kbd>click</kbd> glide in</span><span><kbd>scroll</kbd> zoom</span><span><kbd>drag</kbd> pan</span><span><kbd>pinch</kbd> zoom on touch</span>
+        <span><kbd>+</kbd> <kbd>-</kbd> zoom</span><span><kbd>arrows</kbd> pan</span><span><kbd>r</kbd> reset</span><span><kbd>j</kbd> toggle julia</span>
+      </div>
+    </div>
+    <hr class="sep">
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
