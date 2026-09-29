@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Derivative Visualizer : Math Lab</title>
+    <meta name="description" content="Interactive multi-tier Derivative Visualizer. Watch derivatives assemble in real-time as the tangent line glides.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <a class="back" href="../index.html">← math lab</a>
+
+        <div class="title">
+            <div class="eyebrow">31 / CALCULUS</div>
+            <h1>DERIVATIVE <span>VISUALIZER</span></h1>
+        </div>
+
+        <div class="formula">f'(x) = lim_{h→0} [f(x+h) - f(x)] / h</div>
+    </header>
+
+    <main>
+        <section class="intro">
+            <div>
+                <div class="kicker">GEOMETRIC DIFFERENTIATION &amp; DERIVATIVE CASCADE</div>
+                <h2>the slope of the tangent<br>becomes the height of the curve.</h2>
+                <p class="description">
+                    Drag the probe along f(x) or scrub x to watch the tangent line tilt and rotate.
+                    Its instantaneous slope translates into the vertical coordinate of f'(x), tracing the
+                    derivative curve dot-by-dot. Add successive derivative tiers below to observe how
+                    rates of rates unveil velocity, concavity, and higher-order dynamics.
+                </p>
+            </div>
+
+            <div class="stats">
+                <div>
+                    <span>ACTIVE TIERS</span>
+                    <b id="statTiers">2 TIERS</b>
+                </div>
+                <div>
+                    <span>PROBE X (a)</span>
+                    <b id="statX">1.000</b>
+                </div>
+                <div>
+                    <span>SLOPE f'(a)</span>
+                    <b id="statSlope">2.000</b>
+                </div>
+            </div>
+        </section>
+
+        <section class="lab">
+            <div class="canvas-wrap" id="canvasWrap">
+                <canvas id="canvas"></canvas>
+            </div>
+
+            <aside class="controls">
+
+                <!-- 1. Function -->
+                <div class="control-block">
+                    <div class="section-label">FUNCTION f(x)</div>
+
+                    <div class="formula-input-wrap">
+                        <div class="input-with-badge">
+                            <span class="prefix">f(x) =</span>
+                            <input id="fnInput" type="text" value="sin(3*x) / (1 + 0.2*x^2)" spellcheck="false" autocomplete="off" placeholder="e.g. sin(3*x) / (1 + 0.2*x^2), 0.08*(x^4 - 6*x^2 + x)">
+                            <span class="input-status-indicator" id="inputStatus" title="Syntax valid"></span>
+                        </div>
+                        <div class="fn-msg" id="fnMsg">parsed: f(x) = sin(3x) / (1 + 0.2x²)</div>
+                    </div>
+
+                    <div class="label-row" style="margin-top: 14px;">
+                        <span>PRESETS</span>
+                    </div>
+                    <div class="preset-grid">
+                        <button class="preset-btn primary" data-fn="sin(3*x) / (1 + 0.2*x^2)">sombrero pulse</button>
+                        <button class="preset-btn" data-fn="0.08 * (x^4 - 6*x^2 + x)">double well</button>
+                        <button class="preset-btn" data-fn="sin(x^2 / 4)">chirp wave</button>
+                        <button class="preset-btn" data-fn="2 * tanh(1.5 * x)">sigmoid step</button>
+                        <button class="preset-btn" data-fn="exp(-0.2 * x) * cos(2 * x)">damped pendulum</button>
+                        <button class="preset-btn" data-fn="4 / (1 + x^2)">witch of agnesi</button>
+                        <button class="preset-btn" data-fn="x^3 / 3 - 2*x + 1">cubic coaster</button>
+                        <button class="preset-btn" data-fn="2 * sin(x) + sin(2.5 * x)">harmonic beats</button>
+                    </div>
+                </div>
+
+                <!-- 2. Derivative Tiers -->
+                <div class="control-block">
+                    <div class="label-row">
+                        <span class="section-label">DERIVATIVE CASCADE</span>
+                        <b id="tierCountLabel">2 TIERS</b>
+                    </div>
+
+                    <div class="tier-chips" id="tierChips">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <div class="tier-actions">
+                        <button id="addTierBtn" class="primary">+ add tier</button>
+                        <button id="removeTierBtn" class="danger">− remove</button>
+                    </div>
+                </div>
+
+                <!-- 3. Drawing -->
+                <div class="control-block">
+                    <div class="section-label">DRAWING MODE</div>
+
+                    <div class="draw-mode-segmented">
+                        <button id="modeLive" class="mode-btn active" title="Reveals derivative as probe visits points">live probe</button>
+                        <button id="modeFull" class="mode-btn" title="Draws full derivative across entire domain">full curve</button>
+                    </div>
+
+                    <div class="buttons" style="margin-top: 10px;">
+                        <button id="drawFullBtn" class="primary" title="Draw complete derivative now">draw full</button>
+                        <button id="clearTraceBtn">clear trace</button>
+                    </div>
+                </div>
+
+                <!-- 4. Probe -->
+                <div class="control-block">
+                    <div class="label-row">
+                        <span class="section-label">PROBE x = a</span>
+                        <b id="probeLabel">1.000</b>
+                    </div>
+                    <input id="probeInput" type="range" min="-10" max="10" step="0.01" value="1">
+
+                    <div class="buttons single" style="margin-top: 10px;">
+                        <button id="playBtn" class="primary">auto sweep</button>
+                    </div>
+                </div>
+
+                <!-- 5. View -->
+                <div class="control-block">
+                    <div class="section-label">VIEW &amp; DISPLAY</div>
+
+                    <div class="toggles" style="margin-top: 10px;">
+                        <label>
+                            <input id="toggleTangent" type="checkbox" checked>
+                            <span>show tangent line</span>
+                        </label>
+                        <label>
+                            <input id="toggleGuide" type="checkbox" checked>
+                            <span>vertical sync guide</span>
+                        </label>
+                    </div>
+
+                    <div class="buttons single" style="margin-top: 12px;">
+                        <button id="resetZoomBtn" title="Reset to default 10×10 view">&#8634; reset view</button>
+                    </div>
+                </div>
+
+                <!-- 6. Live Readout -->
+                <div class="control-block">
+                    <div class="section-label">CALCULUS STATE AT x = a</div>
+                    <div class="live-readout-card" id="liveReadoutCard">
+                        <div class="readout-row">
+                            <span class="name">x = a</span>
+                            <span class="val" id="readoutA">1.000</span>
+                        </div>
+                        <div class="readout-row">
+                            <span class="name">f(a)</span>
+                            <span class="val" id="readoutF" style="color: var(--cyan);">−2.000</span>
+                        </div>
+                        <div class="readout-row">
+                            <span class="name">f'(a)</span>
+                            <span class="val" id="readoutF1" style="color: var(--pink);">0.000</span>
+                        </div>
+                        <div class="readout-row">
+                            <span class="name">tangent</span>
+                            <span class="val" id="readoutTanEq" style="color: var(--text);">y = −2.00</span>
+                        </div>
+                        <div class="readout-row" id="rowReadoutF2">
+                            <span class="name">f''(a)</span>
+                            <span class="val" id="readoutF2" style="color: var(--yellow);">6.000</span>
+                        </div>
+                        <div class="readout-row" id="rowReadoutF3">
+                            <span class="name">f'''(a)</span>
+                            <span class="val" id="readoutF3" style="color: var(--blue);">6.000</span>
+                        </div>
+                        <div class="readout-row" id="rowReadoutF4" style="display: none;">
+                            <span class="name">f⁽⁴⁾(a)</span>
+                            <span class="val" id="readoutF4" style="color: var(--orange);">0.000</span>
+                        </div>
+                        <div class="readout-row" id="rowReadoutF5" style="display: none;">
+                            <span class="name">f⁽⁵⁾(a)</span>
+                            <span class="val" id="readoutF5" style="color: var(--purple);">0.000</span>
+                        </div>
+                    </div>
+                </div>
+
+            </aside>
+        </section>
+
+        <!-- Bottom -->
+        <section class="bottom">
+            <div>
+                <div class="kicker">THE FOUNDATION</div>
+                <h3>the secant line snaps into the tangent.</h3>
+                <p>
+                    A straight line connecting two distinct points on a curve is a <b>secant line</b>.
+                    Its slope is the average rate of change:
+                </p>
+                <div class="math-highlight">
+                    m_secant = [f(a + h) - f(a)] / h
+                </div>
+                <p>
+                    As the distance <b>h</b> contracts toward zero, the second point glides smoothly into the first.
+                    The secant pivots and locks into the <b>tangent line</b>, whose slope represents the instantaneous
+                    rate of change — the exact derivative <b>f'(a)</b>.
+                </p>
+            </div>
+
+            <div>
+                <div class="kicker">THE CASCADE</div>
+                <h3>derivatives of derivatives:<br>the hierarchy of change.</h3>
+                <p>
+                    Differentiation is recursive. If <b>f(x)</b> represents the displacement of a moving particle:
+                </p>
+                <div class="math-highlight">
+                    f(t) : Position<br>
+                    f'(t) : Velocity (instantaneous slope)<br>
+                    f''(t) : Acceleration (concavity &amp; curve bending)<br>
+                    f'''(t) : Jerk (rate of change of acceleration)
+                </div>
+                <p>
+                    By stacking derivative tiers, the abstract chain of higher-order rates becomes an intuitive
+                    geometric reality: each tier's rotating tangent line paints the next curve beneath it.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -97,6 +97,16 @@ const experiments = [
         description: "Move points around and watch their territories continuously reshape.",
         path: "10-voronoi",
         ready: false
+    },
+
+    {
+        number: "31",
+        title: "Derivative Visualizer",
+        category: "calculus",
+        categoryName: "Calculus",
+        description: "Watch tangent slopes assemble derivative curves dot-by-dot across higher-order tiers.",
+        path: "31-derivates",
+        ready: true
     }
 ];
 
