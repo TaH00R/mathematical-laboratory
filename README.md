@@ -16,6 +16,9 @@
 4. Strange Attractors
 
 
+31. Derivative Visualizer
+
+
 ## to be completed 
 
 5. Double Pendulum Chaos
@@ -94,9 +97,6 @@
 
 
 30. Monte Carlo Universe
-
-
-31. Derivative Visualizer
 
 
 32. Integral Builder
