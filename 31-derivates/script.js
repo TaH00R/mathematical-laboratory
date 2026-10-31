@@ -30,12 +30,11 @@ class MathEngine {
 
             // Numbers
             if (/\d/.test(ch) || (ch === '.' && /\d/.test(str[i + 1] || ''))) {
-                let numStr = '';
-                while (i < str.length && (/\d/.test(str[i]) || str[i] === '.')) {
-                    numStr += str[i];
-                    i++;
-                }
-                tokens.push({ type: 'num', value: parseFloat(numStr) });
+                const match = str.slice(i).match(/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?/);
+                const numStr = match[0];
+                i += numStr.length;
+                if (str[i] === '.') throw new Error('Invalid number');
+                tokens.push({ type: 'num', value: Number(numStr) });
                 continue;
             }
 
@@ -57,8 +56,7 @@ class MathEngine {
                 continue;
             }
 
-            // Skip unknown chars
-            i++;
+            throw new Error(`Unexpected character '${ch}'`);
         }
 
         // Implicit multiplication expansion (e.g. 2x, 3sin(x), (x-1)(x+1), x sin(x))
@@ -171,11 +169,12 @@ class MathEngine {
 
                 if (peek() && peek().type === 'op' && peek().value === '(') {
                     consume();
+                    if (!['sin','cos','tan','asin','acos','atan','sinh','cosh','tanh','exp','log','ln','log10','sqrt','cbrt','abs','sign','floor','ceil','round'].includes(id)) throw new Error(`Unknown function '${id}'`);
                     const arg = parseExpr();
                     consume({ type: 'op', value: ')' });
                     return { type: 'call', fn: id, arg };
                 }
-                return { type: 'var', name: id };
+                throw new Error(`Unknown variable '${id}'`);
             }
 
             throw new Error(`Unexpected token '${token.value}'`);
@@ -201,7 +200,7 @@ class MathEngine {
                     case '+': return left + right;
                     case '-': return left - right;
                     case '*': return left * right;
-                    case '/': return Math.abs(right) < 1e-15 ? (left >= 0 ? Infinity : -Infinity) : left / right;
+                    case '/': return left / right;
                     case '%': return left % right;
                     case '^': return Math.pow(left, right);
                 }
@@ -308,7 +307,7 @@ class MathEngine {
                             }
                         });
                 }
-                return { type: 'num', value: 0 };
+                throw new Error('Use numerical derivative for this operator');
             }
             case 'call': {
                 const u = ast.arg;
@@ -355,10 +354,10 @@ class MathEngine {
                             right: { type: 'binary', op: '+', left: { type: 'num', value: 1 }, right: { type: 'binary', op: '^', left: u, right: { type: 'num', value: 2 } } }
                         });
                 }
-                return { type: 'num', value: 0 };
+                throw new Error('Use numerical derivative for this function');
             }
         }
-        return { type: 'num', value: 0 };
+        throw new Error('Unknown derivative');
     }
 
     static simplify(ast) {
@@ -370,7 +369,7 @@ class MathEngine {
             if (left.type === 'num' && right.type === 'num') {
                 const val = this.evaluate({ type: 'binary', op: ast.op, left, right }, 0);
                 if (Number.isFinite(val)) {
-                    return { type: 'num', value: Math.round(val * 1e8) / 1e8 };
+                    return { type: 'num', value: val };
                 }
             }
 
@@ -587,10 +586,6 @@ const state = {
 function compileEquation(exprStr) {
     try {
         const ast = MathEngine.parse(exprStr);
-        const testY = MathEngine.evaluate(ast, 0);
-        if (Number.isNaN(testY) && Number.isNaN(MathEngine.evaluate(ast, 1))) {
-            throw new Error("Formula yielded NaN for test values");
-        }
 
         state.rawFn = exprStr;
         state.ast = ast;
@@ -601,9 +596,11 @@ function compileEquation(exprStr) {
         let currAst = ast;
         for (let i = 1; i <= 6; i++) {
             try {
+                if (!currAst) throw new Error("Numerical fallback");
                 currAst = MathEngine.diff(currAst);
                 state.tierAsts.push(currAst);
             } catch (e) {
+                currAst = null;
                 state.tierAsts.push(null);
             }
         }
@@ -613,11 +610,12 @@ function compileEquation(exprStr) {
             inputStatus.title = "Formula valid";
         }
         if (fnMsg) {
-            fnMsg.textContent = `parsed: f(x) = ${MathEngine.format(ast)}`;
+            fnMsg.textContent = "Valid expression";
             fnMsg.style.color = "var(--muted)";
         }
 
         invalidateCurveCache();
+        resetTrace();
         render();
     } catch (err) {
         if (inputStatus) {
@@ -731,6 +729,7 @@ function resetTrace() {
 // ============================================================================
 
 function resizeCanvas() {
+    canvasWrap.style.height = `${Math.max(window.innerWidth < 900 ? 380 : 620, state.tierCount * 180)}px`;
     const rect = canvasWrap.getBoundingClientRect();
     state.width = Math.floor(rect.width);
     state.height = Math.floor(rect.height);
@@ -748,10 +747,11 @@ function resizeCanvas() {
 }
 
 window.addEventListener("resize", resizeCanvas);
+new ResizeObserver(resizeCanvas).observe(canvasWrap);
 
 function getPaneGeometry(tierIdx) {
     const totalTiers = Math.max(1, state.tierCount);
-    const paddingX = 64;
+    const paddingX = state.width < 500 ? 32 : 42;
     const headerHeight = 28;
     const bottomPad = 22;
 
@@ -840,7 +840,7 @@ function render() {
         ctx.fillStyle = meta.color;
         ctx.font = "11px 'DM Mono', monospace";
         ctx.textAlign = "left";
-        ctx.fillText(`[${meta.label}] ${meta.title}`, pane.plotX, pane.topY + 18);
+        ctx.fillText(state.width < 500 ? meta.label : `[${meta.label}] ${meta.title}`, pane.plotX, pane.topY + 18);
 
         const valAtA = evalTier(k, a);
         const slopeAtA = evalTier(k + 1, a);
@@ -849,13 +849,13 @@ function render() {
         ctx.fillStyle = "rgba(223, 250, 244, 0.75)";
         const valStr = Number.isFinite(valAtA) ? valAtA.toFixed(3) : "undef";
         const slopeStr = Number.isFinite(slopeAtA) ? (slopeAtA >= 0 ? `+${slopeAtA.toFixed(3)}` : slopeAtA.toFixed(3)) : "undef";
-        ctx.fillText(`(a = ${a.toFixed(2)}, y = ${valStr})  ·  tangent slope = ${slopeStr}`, pane.plotX + pane.plotW, pane.topY + 18);
+        ctx.fillText(state.width < 500 ? `x=${a.toFixed(2)}  m=${slopeStr}` : `(a = ${a.toFixed(2)}, y = ${valStr})  ·  tangent slope = ${slopeStr}`, pane.plotX + pane.plotW, pane.topY + 18);
 
         // 3. Grid & Coordinate Axes
         drawPaneGrid(pane, yMin, yMax);
 
         // 4. Traced Curve Segments (glowing main curve)
-        drawCurve(k, pane, yMin, yMax, true);
+        drawCurve(k, pane, yMin, yMax, k > 0);
 
         // 5. Tangent Line & Slope Vector on Tier k
         const ptA = mathToCanvas(a, valAtA, pane, yMin, yMax);
@@ -1295,7 +1295,7 @@ function updateTierChips() {
 // ============================================================================
 
 function tick(now) {
-    const dt = (now - state.lastFrameTime) / 1000;
+    const dt = Math.min(0.05, (now - state.lastFrameTime) / 1000);
     state.lastFrameTime = now;
 
     if (state.animating) {
@@ -1377,14 +1377,16 @@ function zoomAt(mousePxX, mousePxY, factor) {
     state.xMin = centerMathX - ratioX * newSpanX;
     state.xMax = centerMathX + (1 - ratioX) * newSpanX;
 
+    const zoomRatioY = (centerMathY - state.paneYBounds[activeTier].yMin) / (state.paneYBounds[activeTier].yMax - state.paneYBounds[activeTier].yMin);
     // Zoom Y simultaneously at the exact same 1:1 factor across tiers
     for (let k = 0; k < 7; k++) {
         const b = state.paneYBounds[k];
         const curSpanY = b.yMax - b.yMin;
         const newSpanY = Math.max(0.01, Math.min(10000, curSpanY * factor));
-        const ratioY = (centerMathY - b.yMin) / curSpanY;
-        b.yMin = centerMathY - ratioY * newSpanY;
-        b.yMax = centerMathY + (1 - ratioY) * newSpanY;
+        const ratioY = zoomRatioY;
+        const anchorY = b.yMin + ratioY * curSpanY;
+        b.yMin = anchorY - ratioY * newSpanY;
+        b.yMax = anchorY + (1 - ratioY) * newSpanY;
     }
 
     render();
@@ -1459,63 +1461,16 @@ canvas.addEventListener("pointercancel", () => {
     canvas.style.cursor = "crosshair";
 });
 
-// Wheel / Trackpad with 1:1 2D zoom and 2D pan
-let _wheelLastTime = 0;
-let _wheelAccumDelta = 0;
-
+// Ordinary wheel scrolling belongs to the page; Ctrl+wheel and trackpad pinch zoom.
 canvas.addEventListener("wheel", (e) => {
+    if (!e.ctrlKey) return;
     const rect = canvas.getBoundingClientRect();
     const mousePxX = e.clientX - rect.left;
     const mousePxY = e.clientY - rect.top;
-
-    const pane0 = getPaneGeometry(0);
-    // Allow natural page scrolling when cursor is outside the graph plot box
-    if (mousePxX < pane0.plotX || mousePxX > pane0.plotX + pane0.plotW) {
-        return;
-    }
-
+    const pane = getPaneGeometry(getPaneAtY(mousePxY));
+    if (mousePxX < pane.plotX || mousePxX > pane.plotX + pane.plotW) return;
     e.preventDefault();
-
-    if (e.ctrlKey) {
-        // Trackpad pinch-to-zoom (isotropic 1:1)
-        const zoomFactor = Math.exp(e.deltaY * 0.0035);
-        zoomAt(mousePxX, mousePxY, zoomFactor);
-        return;
-    }
-
-    const pixelMag = Math.abs(e.deltaX) + Math.abs(e.deltaY);
-    const isTrackpadScroll = (e.deltaMode === 0 && pixelMag < 60);
-
-    if (isTrackpadScroll) {
-        // Trackpad two-finger scroll -> 2D Pan
-        const pane = getPaneGeometry(0);
-        const spanX = state.xMax - state.xMin;
-        const panDeltaX = (e.deltaX / pane.plotW) * spanX * 0.8;
-
-        state.xMin += panDeltaX;
-        state.xMax += panDeltaX;
-
-        for (let k = 0; k < 7; k++) {
-            const p = getPaneGeometry(k);
-            const spanY = state.paneYBounds[k].yMax - state.paneYBounds[k].yMin;
-            const panDeltaY = -(e.deltaY / p.plotH) * spanY * 0.8;
-            state.paneYBounds[k].yMin += panDeltaY;
-            state.paneYBounds[k].yMax += panDeltaY;
-        }
-
-        render();
-    } else {
-        // Mouse wheel -> smooth 1:1 zoom centered on cursor
-        const now = performance.now();
-        _wheelAccumDelta += e.deltaY * (e.deltaMode === 1 ? 30 : 1);
-
-        if (now - _wheelLastTime > 16) {
-            _wheelLastTime = now;
-            const zoomFactor = Math.exp(_wheelAccumDelta * 0.0018);
-            _wheelAccumDelta = 0;
-            zoomAt(mousePxX, mousePxY, zoomFactor);
-        }
-    }
+    zoomAt(mousePxX, mousePxY, Math.exp(e.deltaY * 0.0035));
 }, { passive: false });
 
 
@@ -1545,6 +1500,7 @@ if (addTierBtn) {
     addTierBtn.addEventListener("click", () => {
         if (state.tierCount < 6) {
             state.tierCount++;
+            resizeCanvas();
             updateTierChips();
             resetTrace();
             render();
@@ -1556,6 +1512,7 @@ if (removeTierBtn) {
     removeTierBtn.addEventListener("click", () => {
         if (state.tierCount > 1) {
             state.tierCount--;
+            resizeCanvas();
             updateTierChips();
             render();
         }
@@ -1637,7 +1594,7 @@ if (toggleGuide) {
 
 // Keyboard Shortcuts
 window.addEventListener("keydown", (e) => {
-    if (document.activeElement === fnInput) return;
+    if (document.activeElement?.matches("input,select,textarea,button")) return;
 
     const step = (state.xMax - state.xMin) * 0.01;
     if (e.key === "ArrowLeft") {

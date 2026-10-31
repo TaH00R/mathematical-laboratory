@@ -251,7 +251,7 @@ the canvas is actually rendering a 3D trajectory.
 
 drag it around to change the viewing angle.
 
-scroll to zoom.
+Ctrl+scroll to zoom.
 
 this isn't changing the mathematics at all.
 
@@ -335,7 +335,7 @@ the **random starting point** button exists specifically so you can see how quic
 | **reset simulation** | starts again from the current initial state |
 | **random starting point** | chooses a new initial state |
 | **drag** | rotates the 3D camera |
-| **scroll** | zooms the camera |
+| **Ctrl+scroll** | zooms the camera |
 
 ## why the trajectory doesn't need randomness
 

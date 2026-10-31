@@ -6,12 +6,12 @@
   <title>mandelbrot // observatory</title>
   <meta name="description" content="an interactive Mandelbrot observatory — explore the boundary, zoom deep, and inspect Julia sets.">
   <meta name="theme-color" content="#071018">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared.css">
 </head>
 <body>
   <header>
-    <div class="eyebrow">FRACTAL OBSERVATORY / 01</div><h1>mandelbrot <span>// observatory</span></h1>
-    <p>one line of math, <b>z = z&sup2; + c</b>. Navigate the boundary, chase the spirals, and dive until the numbers give out.</p>
+    <div class="explorer-toolbar"><a class="back" href="../">&larr; Math Lab</a><nav class="explorer-nav" aria-label="Experiments"><a id="previous" href="../50-mathematical-universe/" aria-label="Previous experiment: Mathematical Universe">&larr; Previous</a><a id="next" href="../02-burning-ship/" aria-label="Next experiment: Burning Ship Fractal">Next &rarr;</a></nav></div><h1>mandelbrot <span>// observatory</span></h1>
+    <p>Explore z² + c. Drag to pan; Ctrl+scroll or pinch to zoom.</p>
   </header>
   <main>
     <div class="panel">
@@ -25,7 +25,7 @@
           <div class="row"><span>iterations</span><b id="hit"></b></div>
           <div class="status"><span id="heng"></span><span id="htime"></span></div>
         </div>
-        <div class="hint" id="hint">click to zoom in, scroll to zoom, drag to pan</div>
+        <div class="hint" id="hint">click to zoom in, Ctrl+scroll to zoom, drag to pan</div>
         <div class="jlabel" id="jlabel">julia set at cursor</div>
         <canvas id="julia" width="400" height="260"></canvas>
       </div>
@@ -40,13 +40,12 @@
         <button id="share">copy link</button>
       </div>
       <div class="spots" id="spots"><span class="lbl">places</span></div>
-      <div class="keys">
-        <span><kbd>click</kbd> glide in</span><span><kbd>scroll</kbd> zoom</span><span><kbd>drag</kbd> pan</span><span><kbd>pinch</kbd> zoom on touch</span>
-        <span><kbd>+</kbd> <kbd>-</kbd> zoom</span><span><kbd>arrows</kbd> pan</span><span><kbd>r</kbd> reset</span><span><kbd>j</kbd> toggle julia</span>
-      </div>
+
     </div>
     <hr class="sep">
-  </main>
+  <section class="experiment-note" aria-label="About this experiment"><div><h2>The idea</h2><p>The Mandelbrot set contains complex values c whose repeated sequence z = z*z + c stays bounded when it starts at zero. Outside the set, color records how quickly the sequence escapes.</p><code>z(n+1) = z(n)^2 + c; z(0) = 0</code></div><div><h2>Try this</h2><p>Try a boundary bookmark, increase detail and hover to compare the related Julia set. The CPU/GPU switch changes the renderer while preserving the view.</p></div></section>
+    </main>
+  <script src="worker.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

@@ -58,7 +58,7 @@ When $f''(x) > 0$, the curve is concave up (holds water). When $f''(x) < 0$, it 
 
 - **Custom Mathematical Function Parsing**: Type any mathematical expression like `x^3 - 3*x`, `sin(2*x)*exp(-0.2*x)`, `1/(1+x^2)`, or `x^4 - 4*x^2`. Features Pratt parsing with implicit multiplication, trig, exponential, logarithmic, and power functions.
 - **Symbolic AST Differentiator + Numerical Stencil Fallback**: Computes exact symbolic derivatives via AST transformation with 5-point central stencil fallbacks.
-- **Full 2D Isotropic Pan & Zoom**: 1:1 synchronized canvas navigation (Desmos-style). Click and drag to pan both axes, scroll wheel to zoom into features, and use the Reset View button to instantly return to $10 \times 10$ isotropic scale.
+- **Full 2D Isotropic Pan & Zoom**: 1:1 synchronized canvas navigation (Desmos-style). Click and drag to pan both axes, Ctrl+scroll to zoom into features, and use the Reset View button to instantly return to $10 \times 10$ isotropic scale.
 - **Dynamic Slope Triangle**: Automatically appears at close zoom levels to reveal $\Delta x$, $\Delta y$, and slope $m = \Delta y / \Delta x$.
 - **Synchronized Probe Focus**: Hovering or dragging in any tier automatically centers the probe and zooms focus into the derivative point on adjacent tiers.
 - **Auto-Sweep Animation**: Smooth real-time sweep across the domain with adjustable playback speed.

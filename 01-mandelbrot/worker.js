@@ -1,3 +1,4 @@
+function installMandelbrotWorker(scope) {
 // this runs inside each web worker. it computes strips of the main image for the cpu
 // fallback (same perturbation math as the gpu shader, in doubles) and the julia preview.
 const BAIL=1e4;
@@ -24,7 +25,7 @@ function inBulbs(cr,ci){
   const q=(cr-0.25)*(cr-0.25)+ci*ci;
   return q*(q+(cr-0.25))<=0.25*ci*ci || (cr+1)*(cr+1)+ci*ci<=0.0625;
 }
-onmessage=e=>{
+scope.onmessage=e=>{
   const m=e.data;
   if(m.type==="orbit"){ orbit=m.Z; orbitJob=m.job; orbitLen=m.M; return; }
   if(m.type==="julia"){
@@ -35,11 +36,11 @@ onmessage=e=>{
         while(xx+yy<=BAIL&&i<max){ y=2*x*y+ci; x=xx-yy+cr; xx=x*x; yy=y*y; i++; }
         out[k++]= xx+yy<=BAIL ? -1 : i+1-Math.log2(Math.log(xx+yy)*0.5/Math.LN2);
       } }
-    postMessage({type:"julia",out,w,h},[out.buffer]);
+    scope.postMessage({type:"julia",out,w,h},[out.buffer]);
     return;
   }
   const {job,y0,y1,w,h,dx,dy,maxIter,bulbs,c0r,c0i,direct}=m;
-  if(job!==orbitJob){ postMessage({type:"strip",job,y0,y1,out:null}); return; }
+  if(job!==orbitJob){ scope.postMessage({type:"strip",job,y0,y1,out:null}); return; }
   const out=new Float32Array((y1-y0)*w);
   let k=0;
   for(let py=y0;py<y1;py++){
@@ -48,5 +49,8 @@ onmessage=e=>{
       // shallow views are exact in plain doubles and that loop is 3x cheaper; deep ones need the reference orbit
       out[k++]= (bulbs&&inBulbs(c0r+dcr,c0i+dci)) ? -1 : direct ? escape(c0r+dcr,c0i+dci,maxIter) : perturb(dcr,dci,orbit,orbitLen,maxIter); }
   }
-  postMessage({type:"strip",job,y0,y1,out},[out.buffer]);
+  scope.postMessage({type:"strip",job,y0,y1,out},[out.buffer]);
 };
+
+}
+if (typeof window === "undefined") installMandelbrotWorker(self);

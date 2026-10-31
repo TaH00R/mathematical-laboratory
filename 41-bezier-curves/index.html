@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bézier Curves : Math Lab</title>
+  <meta name="description" content="A cubic Bézier curve blends four control points. De Casteljau’s construction repeatedly interpolates between neighboring points to locate the curve at a chosen parameter.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="lab-header">
+    <a class="back" href="../">← Math Lab</a>
+    <div class="header-id"><span id="category"></span><code id="formula"></code></div>
+    <nav aria-label="Experiments"><a id="previous">← Previous</a><a id="next">Next →</a></nav>
+  </header>
+  <main class="workspace">
+    <section class="intro">
+      <div><h1 id="title">Bézier Curves</h1><p id="hint"></p></div>
+      <div class="instrument-state"><div><span class="status-light"></span>STATUS<b id="stateLabel">READY</b></div><div>UPDATES<b id="sampleCount">0</b></div></div>
+    </section>
+    <section class="experiment" aria-label="Interactive experiment">
+      <div class="viewport">
+        <canvas id="canvas" aria-label="Bézier Curves visualization"></canvas>
+        <span class="canvas-label">MATHEMATICAL LABORATORY / 41</span>
+        <div class="canvas-tools"><button id="save">Save PNG</button><button id="fullscreen">Fullscreen</button></div>
+      </div>
+      <aside aria-label="Experiment controls">
+        <section class="control-block"><div class="label-row"><h2 class="section-label">Presets</h2><span id="presetStatus">DEFAULT</span></div><div class="presets" id="presets"></div></section>
+        <section class="control-block"><h2 class="section-label">Parameters</h2><div id="controls"></div><div id="audioControls"></div></section>
+        <section class="control-block"><div class="actions"><button class="primary" id="play">Pause</button><button id="step">Step</button><button id="reset">Restart</button></div></section>
+        <section class="control-block"><h2 class="section-label">Live readout</h2><output id="readout" aria-live="off"></output></section>
+        <details><summary>View &amp; playback</summary>
+          <label class="field" id="speedField"><span>Speed</span><b>1</b><input id="speed" aria-label="Playback speed" type="range" min="0.25" max="4" step="0.25" value="1"></label>
+          <label class="field" id="viewZoomField"><span>View scale</span><b>1</b><input id="viewZoom" aria-label="View scale" type="range" min="0.6" max="1.8" step="0.05" value="1"></label>
+          <label class="field"><span>Line weight</span><b>1.5</b><input id="lineWeight" aria-label="Line weight" type="range" min="0.75" max="3" step="0.25" value="1.5"></label>
+          <label class="check" id="gridField"><input type="checkbox" id="showGrid" checked> Show reference grid</label>
+          <button id="defaults">Restore defaults</button><p id="viewStatus" role="status"></p>
+        </details>
+      </aside>
+    </section>
+    <section class="about" aria-label="About this experiment">
+      <div><h2>The idea</h2><p id="aboutText">A cubic Bézier curve blends four control points. De Casteljau’s construction repeatedly interpolates between neighboring points to locate the curve at a chosen parameter.</p><code id="aboutFormula"></code></div>
+      <div class="try"><h3>Try this</h3><p id="tryText">Drag the middle control points and scrub t. Hide the construction lines to inspect the finished curve by itself.</p></div>
+    </section>
+  </main>
+  <script src="../experiments.js"></script>
+  <script src="../shared/math.js"></script>
+  <script src="../shared/lab.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

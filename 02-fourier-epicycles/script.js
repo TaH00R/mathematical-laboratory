@@ -42,12 +42,14 @@ let running = true;
 let drawingMode = true;
 let lastFrame = performance.now();
 let fps = 60;
+let frameScale = 1;
 
 const TAU = Math.PI * 2;
 
 function resizeCanvas() {
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const oldSize = Math.min(width, height);
 
     width = rect.width;
     height = rect.height;
@@ -56,9 +58,15 @@ function resizeCanvas() {
     canvas.height = Math.floor(height * dpr);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const ratio = Math.min(width, height) / oldSize;
+    drawing = drawing.map(p => complex(p.re * ratio, p.im * ratio));
+    coefficients.forEach(c => { c.re *= ratio; c.im *= ratio; c.amplitude *= ratio; });
+    trail = [];
+
 }
 
 window.addEventListener("resize", resizeCanvas);
+new ResizeObserver(resizeCanvas).observe(canvas.parentElement);
 resizeCanvas();
 
 function complex(re, im) {
@@ -88,7 +96,7 @@ function dft(points) {
         result.push({
             re,
             im,
-            freq: k,
+            freq: k > N / 2 ? k - N : k,
             amplitude: Math.hypot(re, im),
             phase: Math.atan2(im, re)
         });
@@ -144,7 +152,7 @@ function createPath(type, count = 700) {
 }
 
 function fitToCanvas(points) {
-    const padding = 80;
+    const padding = Math.min(24, Math.min(width, height) * 0.04);
 
     let minX = Infinity;
     let maxX = -Infinity;
@@ -186,16 +194,20 @@ function rebuild(points) {
 }
 
 function resample(points, count) {
-    if (points.length <= count) return points.slice();
+    if (points.length < 2) return points.slice();
+    const closed = points.concat([points[0]]);
+    const distances = [0];
+    for (let i = 1; i < closed.length; i++) distances.push(distances[i-1] + Math.hypot(closed[i].re-closed[i-1].re, closed[i].im-closed[i-1].im));
+    const total = distances.at(-1);
+    if (total === 0) return points.slice(0, 1);
+    let segment = 1;
+    return Array.from({length: count}, (_, i) => {
+        const distance = total * i / count;
+        while (segment < distances.length - 1 && distances[segment] < distance) segment++;
+        const t = (distance-distances[segment-1]) / Math.max(1e-12, distances[segment]-distances[segment-1]);
+        return complex(closed[segment-1].re*(1-t)+closed[segment].re*t, closed[segment-1].im*(1-t)+closed[segment].im*t);
+    });
 
-    const result = [];
-
-    for (let i = 0; i < count; i++) {
-        const index = Math.floor(i * points.length / count);
-        result.push(points[index]);
-    }
-
-    return result;
 }
 
 function normalizedToCanvas(points) {
@@ -348,7 +360,7 @@ function render() {
     if (drawingMode) {
         if (drawing.length > 1) {
             drawPath(
-                drawing,
+                drawing.map(p => complex(p.re + width / 2, p.im + height / 2)),
                 "rgba(91,156,255,.9)",
                 2
             );
@@ -401,13 +413,14 @@ function render() {
             trail.splice(0, trail.length - maxTrail);
         }
 
-        time += TAU / drawing.length * Number(speedInput.value);
+        time += TAU / drawing.length * Number(speedInput.value) * frameScale;
         if (time > TAU) time -= TAU;
     }
 }
 
 function loop(now) {
-    const delta = now - lastFrame;
+    const delta = Math.min(50, now - lastFrame);
+    frameScale = delta / (1000 / 60);
     lastFrame = now;
 
     const instantFps = 1000 / Math.max(delta, 1);
@@ -418,7 +431,9 @@ function loop(now) {
     requestAnimationFrame(loop);
 }
 
+let currentPreset = "heart";
 function loadPreset(type) {
+    currentPreset = type;
     rebuild(createPath(type));
     running = true;
     animateButton.textContent = "pause";
@@ -426,6 +441,8 @@ function loadPreset(type) {
 
 termsInput.addEventListener("input", () => {
     termsLabel.textContent = termsInput.value;
+    document.getElementById("termValue").textContent = termsInput.value;
+    trail = [];
 });
 
 speedInput.addEventListener("input", () => {
@@ -454,7 +471,7 @@ document.getElementById("clear").addEventListener("click", () => {
 });
 
 document.getElementById("reset").addEventListener("click", () => {
-    loadPreset("heart");
+    loadPreset(currentPreset);
 });
 
 document.querySelectorAll("[data-preset]").forEach(button => {

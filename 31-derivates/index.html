@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Derivative Visualizer : Math Lab</title>
     <meta name="description" content="Interactive multi-tier Derivative Visualizer. Watch derivatives assemble in real-time as the tangent line glides.">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared.css">
 </head>
 <body>
 
@@ -23,14 +23,9 @@
     <main>
         <section class="intro">
             <div>
-                <div class="kicker">GEOMETRIC DIFFERENTIATION &amp; DERIVATIVE CASCADE</div>
-                <h2>the slope of the tangent<br>becomes the height of the curve.</h2>
-                <p class="description">
-                    Drag the probe along f(x) or scrub x to watch the tangent line tilt and rotate.
-                    Its instantaneous slope translates into the vertical coordinate of f'(x), tracing the
-                    derivative curve dot-by-dot. Add successive derivative tiers below to observe how
-                    rates of rates unveil velocity, concavity, and higher-order dynamics.
-                </p>
+
+
+                <p class="description">Drag the probe to trace derivatives. Add tiers to explore higher orders.</p>
             </div>
 
             <div class="stats">
@@ -111,7 +106,7 @@
                     </div>
 
                     <div class="buttons" style="margin-top: 10px;">
-                        <button id="drawFullBtn" class="primary" title="Draw complete derivative now">draw full</button>
+
                         <button id="clearTraceBtn">clear trace</button>
                     </div>
                 </div>
@@ -192,42 +187,8 @@
         </section>
 
         <!-- Bottom -->
-        <section class="bottom">
-            <div>
-                <div class="kicker">THE FOUNDATION</div>
-                <h3>the secant line snaps into the tangent.</h3>
-                <p>
-                    A straight line connecting two distinct points on a curve is a <b>secant line</b>.
-                    Its slope is the average rate of change:
-                </p>
-                <div class="math-highlight">
-                    m_secant = [f(a + h) - f(a)] / h
-                </div>
-                <p>
-                    As the distance <b>h</b> contracts toward zero, the second point glides smoothly into the first.
-                    The secant pivots and locks into the <b>tangent line</b>, whose slope represents the instantaneous
-                    rate of change — the exact derivative <b>f'(a)</b>.
-                </p>
-            </div>
 
-            <div>
-                <div class="kicker">THE CASCADE</div>
-                <h3>derivatives of derivatives:<br>the hierarchy of change.</h3>
-                <p>
-                    Differentiation is recursive. If <b>f(x)</b> represents the displacement of a moving particle:
-                </p>
-                <div class="math-highlight">
-                    f(t) : Position<br>
-                    f'(t) : Velocity (instantaneous slope)<br>
-                    f''(t) : Acceleration (concavity &amp; curve bending)<br>
-                    f'''(t) : Jerk (rate of change of acceleration)
-                </div>
-                <p>
-                    By stacking derivative tiers, the abstract chain of higher-order rates becomes an intuitive
-                    geometric reality: each tier's rotating tangent line paints the next curve beneath it.
-                </p>
-            </div>
-        </section>
+    <section class="experiment-note" aria-label="About this experiment"><div><h2>The idea</h2><p>A derivative measures instantaneous change. The tangent slope of a function becomes the height of its derivative curve; repeating the process reveals rates of rates.</p><code>f′(a) = lim(h -> 0) [f(a+h)-f(a)] / h</code></div><div><h2>Try this</h2><p>Choose a function, drag the probe and watch the next tier form. Switch to full curve for comparison, then add tiers to inspect higher derivatives.</p></div></section>
     </main>
 
     <script src="script.js"></script>

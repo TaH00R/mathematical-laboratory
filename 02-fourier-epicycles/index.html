@@ -4,29 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fourier Epicycles : Math Lab</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared.css">
 </head>
 <body>
 
     <header class="topbar">
         <a class="back" href="../">← math lab</a>
         <div class="title">
-            <span class="eyebrow">02 / ANALYSIS</span>
+            <span class="eyebrow">03 / ANALYSIS</span>
             <h1>FOURIER <span>EPICYCLES</span></h1>
         </div>
-        <div class="formula">f(t) = Σ cₙeⁱⁿᵗ</div>
+        <div class="header-actions"><div class="formula">f(t) = Σ cₙeⁱⁿᵗ</div><nav class="explorer-nav" aria-label="Experiments"><a id="previous" href="../02-burning-ship/" aria-label="Previous experiment: Burning Ship Fractal">&larr; Previous</a><a id="next" href="../03-strange-attractors/" aria-label="Next experiment: Strange Attractors">Next &rarr;</a></nav></div>
     </header>
 
     <main>
         <section class="intro">
             <div>
-                <p class="kicker">FROM WAVES TO DRAWINGS</p>
-                <h2>Rotating circles can draw almost anything.</h2>
-                <p class="description">
-                    Draw a shape or choose a preset. Fourier analysis breaks the
-                    path into rotating circles, then adds those simple waves back
-                    together to reconstruct the drawing.
-                </p>
+
+
+                <p class="description">Draw a shape or choose a preset; adjust the terms to rebuild it with rotating circles.</p>
             </div>
 
             <div class="stats">
@@ -46,7 +42,7 @@
         </section>
 
         <section class="lab">
-            <div class="canvas-wrap">
+            <div class="canvas-wrap width-fit">
                 <canvas id="canvas"></canvas>
 
                 <div class="canvas-hint" id="canvasHint">
@@ -122,32 +118,11 @@
                     <button id="reset">reset preset</button>
                 </div>
 
-                <div class="explain">
-                    <span class="label">WHAT'S HAPPENING?</span>
-                    <p>
-                        A complicated drawing is being represented as a sum of
-                        simple rotating vectors. More Fourier terms means more
-                        frequencies, which means a more accurate reconstruction.
-                    </p>
-                    <code>f(t) = Σ cₙ · eⁱⁿᵗ</code>
-                </div>
-            </aside>
+                </aside>
         </section>
 
-        <section class="bottom">
-            <div>
-                <span class="section-label">THE IDEA</span>
-                <h3>Complex shapes are hiding simple waves.</h3>
-            </div>
 
-            <p>
-                Fourier analysis says that complicated periodic signals can be
-                decomposed into simpler sinusoidal components. Here, each
-                component becomes a rotating vector — an <b>epicycle</b>.
-                Add enough of them together and the endpoint traces the original
-                shape.
-            </p>
-        </section>
+    <section class="experiment-note" aria-label="About this experiment"><div><h2>The idea</h2><p>Fourier analysis decomposes a closed drawing into rotating vectors. Each circle carries one frequency; their sum places the endpoint that traces the reconstructed path.</p><code>f(t) = sum of c(n) * exp(i*n*t)</code></div><div><h2>Try this</h2><p>Choose a preset, reduce the number of terms, then add them back. Draw your own closed shape and compare its reconstruction with the original-path overlay.</p></div></section>
     </main>
 
     <script src="script.js"></script>

@@ -279,7 +279,8 @@ function cpuRecolor(){
 }
 
 // ---------- shared plumbing ----------
-const wurl="worker.js";
+const wurl=URL.createObjectURL(new Blob([`(${installMandelbrotWorker.toString()})(self);`], {type:"text/javascript"}));
+window.addEventListener("pagehide",()=>URL.revokeObjectURL(wurl));
 function fit(){
   const r=stage.getBoundingClientRect(), dpr=Math.min(devicePixelRatio||1,2);
   // size to the viewport, not a fixed cap. on a laptop the explorer takes most
@@ -399,6 +400,7 @@ window.addEventListener("mouseup",e=>{
   drag=null;
 });
 stage.addEventListener("wheel",e=>{
+  if(!e.ctrlKey) return;
   e.preventDefault(); const [px,py]=canvasXY(e);
   const ticks=Math.max(-3,Math.min(3,(e.deltaMode===1?e.deltaY*20:e.deltaY)/100));
   zoomAt(px,py,Math.pow(1.4,-ticks),240); hideHint();

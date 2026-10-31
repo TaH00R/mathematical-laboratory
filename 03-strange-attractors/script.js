@@ -41,6 +41,8 @@ let system = "lorenz";
 let running = true;
 
 let points = [];
+let fitReference = [];
+let fittedView = null;
 let x = 0.1;
 let y = 0;
 let z = 0;
@@ -73,6 +75,7 @@ function resizeCanvas() {
 }
 
 window.addEventListener("resize", resizeCanvas);
+new ResizeObserver(resizeCanvas).observe(canvas.parentElement);
 resizeCanvas();
 
 function getParams() {
@@ -144,7 +147,9 @@ function step() {
         Math.abs(y) > 100000 ||
         Math.abs(z) > 100000
     ) {
-        resetSimulation();
+        running = false;
+        pauseBtn.textContent = "resume";
+        stateStat.textContent = "UNBOUNDED ? RESET";
         return;
     }
 
@@ -157,7 +162,7 @@ function step() {
     }
 }
 
-function project(point, width, height) {
+function project(point) {
     let px = point.x;
     let py = point.y;
     let pz = point.z;
@@ -181,10 +186,34 @@ function project(point, width, height) {
     const perspective = cameraDistance / (cameraDistance - z2);
 
     return {
-        x: width / 2 + x2 * 8.5 * zoom * perspective,
-        y: height / 2 - y1 * 8.5 * zoom * perspective,
+        x: x2 * perspective,
+        y: -y1 * perspective,
         depth: z2
     };
+}
+
+function fitTrajectory() {
+    const sameRotation = fittedView && fittedView.rotationX === rotationX && fittedView.rotationY === rotationY;
+    if (sameRotation && fittedView.lastPoint === points.at(-1)) return fittedView;
+    const reference = (points.length ? points : fitReference).map(p => project(p));
+    let minX = sameRotation ? fittedView.minX : Infinity;
+    let maxX = sameRotation ? fittedView.maxX : -Infinity;
+    let minY = sameRotation ? fittedView.minY : Infinity;
+    let maxY = sameRotation ? fittedView.maxY : -Infinity;
+    for (const p of reference) {
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+    if (!Number.isFinite(minX)) return null;
+    fittedView = {
+        rotationX, rotationY, minX, maxX, minY, maxY, lastPoint: points.at(-1),
+        centerX: (minX + maxX) / 2,
+        centerY: (minY + maxY) / 2,
+        spanX: Math.max(1, maxX - minX),
+        spanY: Math.max(1, maxY - minY)
+    };
+    return fittedView;
 }
 
 function drawAxes(width, height) {
@@ -208,6 +237,16 @@ function drawAxes(width, height) {
 
 function draw() {
     const width = canvas.clientWidth;
+    const fit = fitTrajectory();
+    if (fit) {
+        const padding = Math.min(24, width * 0.04);
+        const targetHeight = Math.max(300, (width - 2 * padding) * fit.spanY / fit.spanX + 2 * padding);
+        if (Math.abs(canvas.parentElement.clientHeight - targetHeight) > 1) {
+            canvas.parentElement.style.height = `${targetHeight}px`;
+            canvas.parentElement.style.minHeight = "0";
+            resizeCanvas();
+        }
+    }
     const height = canvas.clientHeight;
 
     ctx.clearRect(0, 0, width, height);
@@ -218,9 +257,13 @@ function draw() {
         return;
     }
 
-    const projected = points.map(point =>
-        project(point, width, height)
-    );
+    if (!fit) return;
+    const padding = Math.min(24, width * 0.04);
+    const viewScale = Math.min((width - 2 * padding) / fit.spanX, (height - 2 * padding) / fit.spanY) * zoom;
+    const projected = points.map(point => {
+        const p = project(point);
+        return { x: width / 2 + (p.x - fit.centerX) * viewScale, y: height / 2 + (p.y - fit.centerY) * viewScale };
+    });
 
     // Glow layer.
     ctx.save();
@@ -325,6 +368,9 @@ function resetSimulation() {
     z = Number(initialZ.value);
 
     points = [];
+    running = true;
+    pauseBtn.textContent = "pause";
+    stateStat.textContent = "RUNNING";
 
     // Skip the initial transient so the attractor appears quickly.
     for (let i = 0; i < 1200; i++) {
@@ -332,6 +378,9 @@ function resetSimulation() {
     }
 
     points = [];
+    for (let i = 0; i < 6000 && running; i++) step();
+    fitReference = points.slice();
+    fittedView = null;
 }
 
 function updateParameterLabels() {
@@ -489,6 +538,7 @@ window.addEventListener("mousemove", event => {
 });
 
 canvas.addEventListener("wheel", event => {
+    if (!event.ctrlKey) return;
     event.preventDefault();
 
     zoom *= event.deltaY < 0 ? 1.08 : 0.93;
@@ -529,3 +579,5 @@ canvas.addEventListener("touchend", () => {
 updateParameterLabels();
 resetSimulation();
 requestAnimationFrame(animate);
+
+canvas.addEventListener("touchcancel", () => { dragging = false; });

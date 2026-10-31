@@ -54,7 +54,7 @@ there's a live gpu / cpu switch in the toolbar so you can actually feel the diff
 ## usage
 
 open index.html. no server, no build, nothing to install.
-click to glide into a spot. scroll to zoom. drag to pan. pinch on touch. hover for the julia set in the corner. the url updates as you move, so copy it to share any place you find.
+click to glide into a spot. Ctrl+scroll to zoom. drag to pan. pinch on touch. hover for the julia set in the corner. the url updates as you move, so copy it to share any place you find.
 keys: + - zoom, arrows pan, r reset, j toggle julia.
 
 ## known limitations 

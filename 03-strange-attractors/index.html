@@ -4,31 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strange Attractors</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared.css">
 </head>
 <body>
     <header class="topbar">
         <a class="back" href="../index.html">← math lab</a>
 
         <div class="title">
-            <div class="eyebrow">03 / DYNAMICAL SYSTEMS</div>
+            <div class="eyebrow">04 / DYNAMICAL SYSTEMS</div>
             <h1>STRANGE <span>ATTRACTORS</span></h1>
         </div>
 
-        <div class="formula">dx/dt = σ(y − x)</div>
+        <div class="header-actions"><div class="formula">dx/dt = σ(y − x)</div><nav class="explorer-nav" aria-label="Experiments"><a id="previous" href="../02-fourier-epicycles/" aria-label="Previous experiment: Fourier Epicycles">&larr; Previous</a><a id="next" href="../05-double-pendulum/" aria-label="Next experiment: Double Pendulum Chaos">Next &rarr;</a></nav></div>
     </header>
 
     <main>
         <section class="intro">
             <div>
-                <div class="kicker">DETERMINISTIC CHAOS</div>
-                <h2>simple rules.<br>impossibly complicated motion.</h2>
-                <p class="description">
-                    A strange attractor is what happens when a deterministic system
-                    never settles down, never escapes, and yet never quite repeats.
-                    Change the starting point by almost nothing and the trajectories
-                    eventually tear apart.
-                </p>
+
+
+                <p class="description">Choose a system, adjust its parameters, and drag to rotate the trajectory.</p>
             </div>
 
             <div class="stats">
@@ -52,7 +47,7 @@
                 <canvas id="canvas"></canvas>
 
                 <div class="canvas-hint">
-                    DRAG TO ROTATE · SCROLL TO ZOOM
+                    DRAG TO ROTATE · CTRL+SCROLL TO ZOOM
                 </div>
 
                 <div class="draw-status">
@@ -133,43 +128,11 @@
                     <button id="randomBtn">random starting point</button>
                 </div>
 
-                <div class="explain">
-                    <div class="label">WHAT YOU'RE SEEING</div>
-                    <p>
-                        The trajectory is generated numerically from the selected
-                        differential equations. Nothing is being drawn by hand.
-                    </p>
-
-                    <p>
-                        <code>same rules + same start = same trajectory</code>
-                    </p>
-
-                    <p>
-                        Tiny changes to the initial state eventually create visibly
-                        different paths. That's sensitive dependence on initial conditions.
-                    </p>
-                </div>
-            </aside>
+                </aside>
         </section>
 
-        <section class="bottom">
-            <div>
-                <div class="kicker">THE IDEA</div>
-                <h3>chaos isn't randomness.<br>it's mathematics being difficult.</h3>
-            </div>
 
-            <p>
-                The Lorenz system is a set of three coupled differential equations.
-                The simulation repeatedly takes tiny numerical steps through that
-                three-dimensional state space. The resulting path stays inside a
-                bounded region while continually folding and stretching, producing
-                the characteristic butterfly-shaped attractor.
-                <br><br>
-                Try changing <b>ρ</b>, then reset the system. The parameters control
-                the geometry and stability of the system, while the initial conditions
-                decide where the trajectory begins.
-            </p>
-        </section>
+    <section class="experiment-note" aria-label="About this experiment"><div><h2>The idea</h2><p>A strange attractor is a pattern traced by a deterministic system that keeps evolving without settling into a simple repeated orbit. Lorenz and Rossler use different coupled differential equations to generate these paths.</p><code>Lorenz: dx/dt = sigma(y-x); dy/dt = x(rho-z)-y; dz/dt = xy-beta*z</code></div><div><h2>Try this</h2><p>Change one parameter or starting coordinate, then compare the shape of the resulting trajectory. Drag to rotate it and change the time step to explore numerical resolution.</p></div></section>
     </main>
 
     <script src="script.js"></script>
